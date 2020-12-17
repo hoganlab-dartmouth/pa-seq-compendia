@@ -19,13 +19,15 @@ All software necesary has been installed on dscovery by admin.
 ## Usage
 
 1. Upload a run table from sra to the working dir.
-
+eg. scp
 2. Assemble a directory structure.
-
+(to do)
 3. Create a P. aeruginosa transcriptome index.
-
+(to do)
 4. Process samples in the dir against the transcriptome index.
-
+mksub sra_to_salmon.pbs
+or
+./sra2sal_byx.sh 1 # will fun first experiment found in sra_comp/
 ## Support
 
 Georgia.Doing.GR@Dartmouth.edu
