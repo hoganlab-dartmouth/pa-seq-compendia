@@ -1,6 +1,6 @@
 # pa-seq-compendia
 
-To build compendia of publicly available RNAseq data for P. aeruginosa, sepcifically.
+To build compendia of publicly available RNAseq data for *P. aeruginosa*, sepcifically.
 
 This short pipeline (collection of bash scripts) is written to download *P. aeruginosa*
 RNAseq data from the NBCI SRA database and process them with salmon. It works off-of
