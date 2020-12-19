@@ -26,7 +26,7 @@ eg. scp
 
 (to do)
 
-3. Create a P. aeruginosa transcriptome index.
+3. Create a *P. aeruginosa* transcriptome index.
 
 (to do)
 
