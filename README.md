@@ -2,7 +2,7 @@
 
 To build compendia of publicly available RNAseq data for P. aeruginosa, sepcifically.
 
-This short pipeline (collection of bash scripts) is written to download P. aeruginosa
+This short pipeline (collection of bash scripts) is written to download *P. aeruginosa*
 RNAseq data from the NBCI SRA database and process them with salmon. It works off-of
 a pre-downloaded SRA run table and pre-determined salmon parameters.
 
