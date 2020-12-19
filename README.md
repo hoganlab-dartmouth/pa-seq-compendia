@@ -6,7 +6,7 @@ This short pipeline (collection of bash scripts) is written to download *P. aeru
 RNAseq data from the NBCI SRA database and process them with salmon. It works off-of
 a pre-downloaded SRA run table and pre-determined salmon parameters.
 
-Before use PBS script headers will need to be altered to run through a specific user
+Before using the PBS script, the headers will need to be altered to run through a specific user
 account on Dartmouth's disocvery cluster and/or dirs in bash scripts will need to be
 restructured. 
 
