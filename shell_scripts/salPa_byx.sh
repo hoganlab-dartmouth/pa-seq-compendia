@@ -50,6 +50,12 @@ salmon quant -i  ../t_indxs/$2 \
     --validateMappings \
     --writeUnmappedNames \
     --writeMappings=/scratch/$PBS_JOBID/salmon_out/$2/$1.salmon/mappings.sam \
+    --softclip \
+    --softclipOverhangs \
+    --minScoreFraction 0.65 \
+    --fldMean 51 \
+    --rangeFactorizationBias 4 \
+    --seqBias \
     -l A \
     -r ${FQFILES[*]} \
     -o /scratch/$PBS_JOBID/salmon_out/$2/$1.salmon
