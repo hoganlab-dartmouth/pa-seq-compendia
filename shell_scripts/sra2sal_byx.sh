@@ -11,7 +11,7 @@
 
 cd $PBS_O_WORKDIR
 readarray SRXS < <(find sra_comp -mindepth 2 -maxdepth 2 -type d)
-echo $2
+
 ../shell_scripts/salPa_byx.sh ${SRXS[$1]} $2
 
 exit
