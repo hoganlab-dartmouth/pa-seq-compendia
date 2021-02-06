@@ -26,7 +26,7 @@ cd $PBS_O_WORKDIR
 
 module load salmon
 
-salmon index -t ../pao1_cdna.fa.gz -i ./t_ind/pao1_cdna
-salmon index -t ../pa14_cdna.fa.gz -i ./t_ind/pa14_cdna
+salmon index -t ../pao1_cdna.fa.gz -i ./t_ind/pao1_cdna_k15 -k 15
+salmon index -t ../pa14_cdna.fa.gz -i ./t_ind/pa14_cdna_k15 -k 15
 
 
