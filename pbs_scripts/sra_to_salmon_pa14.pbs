@@ -1,7 +1,7 @@
 #!/bin/bash -l
 
 ################################################################################
-#Script Name: sra_to_salmon.pbs
+#Script Name: sra_to_salmon_pa14.pbs
 #Description: Submission script for sra_to_salmon job arrays
 #Args       : None 
 #Author     : Georgia Doing
@@ -9,17 +9,17 @@
 ################################################################################
 
 #PBS -q largeq
-# #PBS -A NCCC
-#PBS -N byx
-#PBS -l walltime=00:30:00
+#PBS -A NCCC
+#PBS -N s2s14
+#PBS -l walltime=01:00:00
 #PBS -l nodes=1:ppn=1
 #PBS -m bea
 #PBS -M Georgia.Doing.GR@Dartmouth.edu
-#PBS -t 1-3000%100
+#PBS -t 1501-2867%100
 #PBS -j oe
 #PBS -e /dartfs-hpc/scratch/f002bx6/salmon/sra_comp/oe
 #PBS -o /dartfs-hpc/scratch/f002bx6/salmon/sra_comp/oe
-
+#PBS -l feature='cellk'
 
 # This is a job array submission script that passes array
 # indices and a directory to a bash script which initiates
@@ -47,4 +47,16 @@
 
 cd $PBS_O_WORKDIR
 
-../shell_scripts/sra2sal_byx.sh ${PBS_ARRAYID} pa14_cdna
+less $PBS_NODEFILE
+#echo $PBS_JOBID
+mkdir /scratch/$PBS_JOBID
+#ls -R /scratch/$PBS_JOBID
+
+if ! ../shell_scripts/sra2sal_byx.sh ${PBS_ARRAYID} pa14_k15 ; then
+    rm -r /scratch/$PBS_JOBID
+#    ls /scratch/$PBS_JOBID
+    echo $PBS_JOBID quant failed
+else
+    echo $PBS_JOBID quant succeeded
+#    ls /scratch/$PBS_JOBID
+fi
