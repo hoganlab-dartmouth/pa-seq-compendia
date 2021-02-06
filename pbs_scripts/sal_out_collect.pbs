@@ -9,9 +9,9 @@
 #Email      : Georgia.Doing.GR@Dartmouth.edu
 ################################################################################
 
-#PBS -q testq
-# #PBS -A NCCC
-#PBS -N sal_out
+#PBS -q default
+#PBS -A NCCC
+#PBS -N sal_out_col
 #PBS -l walltime=00:30:00
 #PBS -l nodes=1:ppn=1
 #PBS -m bea
@@ -24,7 +24,7 @@
 
 cd $PBS_O_WORKDIR
 
-Rscript ../quant_collect.R /dartfs-hpc/scratch/f002bx6/salmon/pao1_cdna/sra_comp \
-../pao1_asm676v1cdna_gene_names.csv \
-pao1.csv
+Rscript ../shape_comp/quant_collect.R /dartfs-hpc/scratch/f002bx6/salmon/pa14_k15/sra_comp \
+../shape_comp/pa14_gene_names.csv \
+pa14_k15.csv
 
