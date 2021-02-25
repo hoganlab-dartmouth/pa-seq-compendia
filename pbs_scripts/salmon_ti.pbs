@@ -9,7 +9,7 @@
 #Email      : Georgia.Doing.GR@Dartmouth.edu
 ################################################################################
 
-#PBS -q testq
+#PBS -q default
 # #PBS -A NCCC
 #PBS -N sal_t_idx
 #PBS -l walltime=00:30:00
@@ -24,9 +24,9 @@
 
 cd $PBS_O_WORKDIR
 
-module load salmon
+conda activate salmon
 
-salmon index -t ../pao1_cdna.fa.gz -i ./t_ind/pao1_cdna_k15 -k 15
-salmon index -t ../pa14_cdna.fa.gz -i ./t_ind/pa14_cdna_k15 -k 15
+salmon index -t ../t_indxs/pao1_cdna.fa.gz -i ..//t_indxs/pao1_cdna_k15 -k 15
+salmon index -t ../t_indxs/pa14_cdna.fa.gz -i ../t_indxs/pa14_cdna_k15 -k 15
 
 
