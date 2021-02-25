@@ -1,0 +1,39 @@
+#!/bin/bash -l
+
+################################################################################
+#Script Name: collect_jobIDs.pbs
+#Description: Submission script for sra_to_salmon job arrays
+#Args       : transcriptome index
+#Author     : Georgia Doing
+#Email      : Georgia.Doing.GR@Dartmouth.edu
+################################################################################
+
+#PBS -q default
+#PBS -A NCCC
+#PBS -N jIDs
+#PBS -l walltime=00:30:00
+#PBS -l nodes=1:ppn=1
+#PBS -m bea
+#PBS -M Georgia.Doing.GR@Dartmouth.edu
+#PBS -j oe
+#PBS -e oe
+#PBS -o oe
+
+
+# This is a job submission script that collects the jobIDs of samples
+# from the sra_comp dir that were not successfully aligned to the t-index
+# given as the first arg. 
+
+# This step is useful to re-run failed jobs without running all jobs in the
+# originally usbmitted job arrays as in the sra_to_salmon submission scripts.
+# It preserves the association between job IDs from the job arrays and the 
+# sra_comp samples which makes looking at the eo files easier.
+
+# Th header contains information specific to the dartmouth
+# discovery user f002bx6, Georgia Doing.
+
+
+cd $PBS_O_WORKDIR
+
+../shell_scripts/collect_jobIDs.sh pao1_cdna_k15
+../shell_scripts/collect_jobIDs.sh pa14_cdna_k15
