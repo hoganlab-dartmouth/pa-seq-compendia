@@ -1,0 +1,30 @@
+#!/bin/bash -l
+
+################################################################################
+#Script Name: sal_logs_collect.pbs
+#Desription : collect salmon logs into matrices
+#Args       : dir, genome
+#Author     : Georgia Doing
+#Date       : 02-18-21
+#Email      : Georgia.Doing.GR@Dartmouth.edu
+################################################################################
+
+#PBS -q default
+#PBS -A NCCC
+#PBS -N sal_log_col
+#PBS -l walltime=00:30:00
+#PBS -l nodes=1:ppn=1
+#PBS -m bea
+#PBS -M Georgia.Doing.GR@Dartmouth.edu
+#PBS -j oe
+#PBS -e oe
+#PBS -o oe
+
+
+
+cd $PBS_O_WORKDIR
+
+python  ../shape_comp/logs_collect.py /dartfs-hpc/scratch/f002bx6/salmon/pa14_cdna_k15/sra_comp
+
+
+python  ../shape_comp/logs_collect.py /dartfs-hpc/scratch/f002bx6/salmon/pao1_cdna_k15/sra_comp
