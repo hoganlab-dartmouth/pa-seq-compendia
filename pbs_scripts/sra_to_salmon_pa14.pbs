@@ -1,0 +1,62 @@
+#!/bin/bash -l
+
+################################################################################
+#Script Name: sra_to_salmon_pa14.pbs
+#Description: Submission script for sra_to_salmon job arrays
+#Args       : None 
+#Author     : Georgia Doing
+#Email      : Georgia.Doing.GR@Dartmouth.edu
+################################################################################
+
+#PBS -q largeq
+#PBS -A NCCC
+#PBS -N s2s14
+#PBS -l walltime=01:00:00
+#PBS -l nodes=1:ppn=1
+#PBS -m bea
+#PBS -M Georgia.Doing.GR@Dartmouth.edu
+#PBS -t 1501-2867%100
+#PBS -j oe
+#PBS -e /dartfs-hpc/scratch/f002bx6/salmon/sra_comp/oe
+#PBS -o /dartfs-hpc/scratch/f002bx6/salmon/sra_comp/oe
+#PBS -l feature='cellk'
+
+# This is a job array submission script that passes array
+# indices and a directory to a bash script which initiates
+# the processing of the experiment-specific file (SRX or ERX)
+# in the specified directory at the specified index.
+
+# This level of parallelization, at the expeirment level,
+# allows for each job to download and process together (in a
+# single salmon quant call) the sequence
+# data associated with a single experiement accession, 
+# which for this data is 1-10 fastq files and 8KB - 18GB. Each
+# job is given 1 processor and 30 min, 3013 jobs are submitted
+# and run 20 at a time.
+
+# To the best of my understanding, SRA experiment accessions
+# correspond to the common understanding of a sample.
+
+# Th header contains information specific to the dartmouth
+# discovery user f002bx6, Georgia Doing.
+
+# See sra2sal_byx.sh for directory requirements.
+
+
+
+
+cd $PBS_O_WORKDIR
+
+less $PBS_NODEFILE
+#echo $PBS_JOBID
+mkdir /scratch/$PBS_JOBID
+#ls -R /scratch/$PBS_JOBID
+
+if ! ../shell_scripts/sra2sal_byx.sh ${PBS_ARRAYID} pa14_k15 ; then
+    rm -r /scratch/$PBS_JOBID
+#    ls /scratch/$PBS_JOBID
+    echo $PBS_JOBID quant failed
+else
+    echo $PBS_JOBID quant succeeded
+#    ls /scratch/$PBS_JOBID
+fi

@@ -1,0 +1,32 @@
+#!/bin/bash -l
+
+################################################################################
+#Script Name: salmon_ti.pbs
+#Desription : create transcriptome indices from cdna fasta
+#Args       : None 
+#Author     : Georgia Doing
+#Date       : 12-18-20
+#Email      : Georgia.Doing.GR@Dartmouth.edu
+################################################################################
+
+#PBS -q testq
+# #PBS -A NCCC
+#PBS -N sal_t_idx
+#PBS -l walltime=00:30:00
+#PBS -l nodes=1:ppn=1
+#PBS -m bea
+#PBS -M Georgia.Doing.GR@Dartmouth.edu
+#PBS -j oe
+#PBS -e oe
+#PBS -o oe
+
+
+
+cd $PBS_O_WORKDIR
+
+module load salmon
+
+salmon index -t ../pao1_cdna.fa.gz -i ./t_ind/pao1_cdna_k15 -k 15
+salmon index -t ../pa14_cdna.fa.gz -i ./t_ind/pa14_cdna_k15 -k 15
+
+
