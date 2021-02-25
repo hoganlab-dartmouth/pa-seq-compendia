@@ -1,0 +1,30 @@
+#!/bin/bash -l
+
+################################################################################
+#Script Name: sal_out_collect.pbs
+#Desription : collect salmon output into matrices
+#Args       : dir, genome, outfile
+#Author     : Georgia Doing
+#Date       : 12-18-20
+#Email      : Georgia.Doing.GR@Dartmouth.edu
+################################################################################
+
+#PBS -q default
+#PBS -A NCCC
+#PBS -N sal_out_col
+#PBS -l walltime=00:30:00
+#PBS -l nodes=1:ppn=1
+#PBS -m bea
+#PBS -M Georgia.Doing.GR@Dartmouth.edu
+#PBS -j oe
+#PBS -e oe
+#PBS -o oe
+
+
+
+cd $PBS_O_WORKDIR
+
+Rscript ../shape_comp/quant_collect.R /dartfs-hpc/scratch/f002bx6/salmon/pa14_k15/sra_comp \
+../shape_comp/pa14_gene_names.csv \
+pa14_k15.csv
+
