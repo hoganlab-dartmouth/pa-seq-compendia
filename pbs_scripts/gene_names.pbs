@@ -1,0 +1,33 @@
+#!/bin/bash -l
+
+################################################################################
+#Script Name: gene_names.pbs
+#Desription : collect salmon output into matrices
+#Args       : 
+#Author     : Georgia Doing
+#Date       : 12-18-20
+#Email      : Georgia.Doing.GR@Dartmouth.edu
+################################################################################
+
+#PBS -q default
+#PBS -A NCCC
+#PBS -N gene_names
+#PBS -l walltime=00:30:00
+#PBS -l nodes=1:ppn=1
+#PBS -m bea
+#PBS -M Georgia.Doing.GR@Dartmouth.edu
+#PBS -j oe
+#PBS -e oe
+#PBS -o oe
+
+
+
+cd $PBS_O_WORKDIR
+
+conda activate rtest
+
+Rscript ../shape_comp/gene_names_map.R \
+../t_indxs/pao1_genome.fa.gz pao1_gene_names.csv
+
+Rscript ../shape_comp/gene_names_map.R \
+../t_indxs/pa14_genome.fa.gz pa14_gene_names.csv
