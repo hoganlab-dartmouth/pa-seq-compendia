@@ -24,11 +24,12 @@ eg. scp
 
 2. Assemble a directory structure.
 
-(to do)
+/run_table/run_table_dirs.R
 
 3. Create a *P. aeruginosa* transcriptome index.
 
-(to do)
+salmon index -t ../t_indxs/pao1_cnda.fa.gz -i ../t_indxs/pao1_cdna_k15 -k 15
+
 
 4. Process samples in the dir against the transcriptome index.
 
@@ -37,6 +38,17 @@ mksub sra_to_salmon.pbs
 or
 
 ./sra2sal_byx.sh 1 # will fun first experiment found in sra_comp/
+
+5. Collect salmon output and log data
+
+/shape_comp/gene_names.R
+/shape_comp/quant_collect.R
+/shape_comp/logs_collect.py
+
+6. Download the processed data
+eg. scp
+
+
 ## Support
 
 Georgia.Doing.GR@Dartmouth.edu
