@@ -39,11 +39,17 @@ or
 
 ./sra2sal_byx.sh 1 # will fun first experiment found in sra_comp/
 
+Iterate between the following scripts until all samples have sucessfully run
+
+/collect_jobIDs.pbs
+/collected_IDs_jobs.pbs
+
 5. Collect salmon output and log data
 
 /shape_comp/gene_names.R
 /shape_comp/quant_collect.R
 /shape_comp/logs_collect.py
+
 
 6. Download the processed data
 eg. scp
