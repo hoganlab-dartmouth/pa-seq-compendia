@@ -1,0 +1,551 @@
+---
+title: "Pa Compendia Quality Control: application"
+output: html_notebook
+author: Georgia Doing
+date: June 21, 2021
+---
+#### Background
+
+In the genesis of this compendium of RNAseq data, a wide net was cast on the NCBI SRA database in order to maximize the number of publicly available P. aeruginosa RNAseq datasets collected. For details on the search project see documentation: https://docs.google.com/document/d/1OnvJNVkhK5ATnhHaeSmz8Ze_Iw9ixXhfSxAL_BSqbuM/edit
+
+In order to ensure the quality of the compendium, we need to impose some heuristic and data-driven inclusion criteria. To do so we will look at some high-level characteristics of the compendium before narrowing in the the specific criteria we will use, acknowleding that they are specific to this compendium and may not necessarily generalize to other compendia.
+
+#### Outline
+
+1. Setup and data import
+3. Sparsity
+4. Genes with expected patterns
+5. Median expression
+6. Final criteria
+7. Save filtered compendia
+
+## 1. Setup and data import
+
+
+
+```{r, message=F, warning=F}
+library(ggplot2)
+library(ComplexHeatmap)
+library(kableExtra)
+library(eulerr)
+source('~/Dropbox (Hogan Lab)/Resources/Annotations/annotation_functions.R')
+source('~/Dropbox (Hogan Lab)/Resources/Scripts/fsqn.R')
+source('filter_functions.R')
+```
+
+
+
+
+Load the array compendiu on which eADAGE was trained for comparisons and reference as well as the PAO1- and PA14- aligned RNAseq compendia in both estimated counts and TPM forms resulting from the Salmon workflow.
+
+
+Note that row names are converted from the ensemble cDNA gene IDs to PAO1 numbers.
+
+```{r}
+rnaseq_pao1_tpm <- read.csv('compendia_download/TPM_pao1_cdna_k15.csv', stringsAsFactors = F, row.names = 1)
+rnaseq_pao1_tpm <- rnaseq_pao1_tpm[,-1]
+rownames(rnaseq_pao1_tpm) <- make.unique(sapply(rownames(rnaseq_pao1_tpm), function(x) cDNA_to_PAO1(x)))
+
+rnaseq_pao1_counts <- read.csv('compendia_download/num_reads_pao1_cdna_k15.csv', stringsAsFactors = F, row.names = 1)
+rnaseq_pao1_counts <- rnaseq_pao1_counts[,-1]
+rownames(rnaseq_pao1_counts) <- make.unique(sapply(rownames(rnaseq_pao1_counts), function(x) cDNA_to_PAO1(x)))
+```
+
+
+
+
+# 2. Load Annotations
+
+```{r}
+run_table <- read.csv('SraRunTable.csv', stringsAsFactors = F)
+
+```
+
+First load the annotations to see how many samples there are in each experiment.
+```{r, warning=F}
+ann_exp_groups <- sapply(colnames(rnaseq_pao1_tpm), function(x){
+  exp <- if(substr(x,1,regexpr('\\.',x)[1]-1) %in% run_table$Experiment){
+    run_table$SRA_study[ run_table$Experiment == substr(x,1,regexpr('\\.',x)[1]-1)]
+  }   else{
+    NA
+  }
+  exp[1]
+  }
+)
+
+kable_classic(kable(head(sort(table(ann_exp_groups), decreasing = T), n=10), col.names = c("SRA Experiment","total # of samples"),
+      caption = "10 largest experiments in the compendium and the number of samples each has"))
+```
+
+## 3. Sparsity 
+Although RNAseq data can be inherently sparse, perhaps reflecting the biological nature of gene expression and the prevalence of condition-dependent or accessory genes, if a gene expression profile is too sparse it could be an indication of low read depth or low-quality reads. 
+
+
+
+
+Using the set of genes that intersects the array probes, we can check for samples with too many unexpressed (or undetected) genes to add biological value to our compendium in which case including them will only add noise.
+
+The array compendium has a narrower distribution of sparse samples with the maximum number of undected genes (for biological or technical reasons) being less than 1,200 , or `r 120000 / nrow(rnaseq_pao1_tpm)` %, of genes.
+
+
+
+```{r, warning=F}
+
+pao1_seq_zeros <- apply(rnaseq_pao1_counts, 2, FUN = function(x) sum( x  == 0))
+
+par(mfrow=c(1,2))
+hist(pao1_seq_zeros, main = 'PAO1')
+q <- quantile(pao1_seq_zeros, probs = c(.1,.2,.3,.4,.5,.6,.7,.8,.9,.95,1))
+#abline(v = q[1], col='red', lty=2)
+abline(v = q[10], col='red', lty=2)
+
+
+
+
+```
+Using the above distributions we can determine the cutoff that will capture 95% of the samples.
+
+
+
+
+In addition to samples being too sparse, RNAseq samples that are not sparse enough can be indicative of technical complications such as DNA contamination. This is identifiable when genes that are typically very lowly expressed are unexpetedly highly expressed in a given sample.
+
+Knowing the wide range of gene expression values captured in RNAseq, it is adventageous to visualize counts and/or TPM values after log transformation. Note that zeros values remain zeros after transformation.
+
+
+
+Can sparsity be attributable to the expression patterns of a subset of genes
+
+
+
+```{r}
+c1 <- rgb(173,216,230, max = 255, alpha = 100, names = "lt.blue")
+c2 <- rgb(255,192,203, max = 255, alpha = 50, names = "lt.pink")
+c3 <- rgb(173,216,203, max = 255, alpha = 100, names = "lt.green")
+c4 <- rgb(203,173,203, max = 255, alpha = 50, names = "lt.red")
+```
+
+```{r, warning=F}
+rnaseq_pao1_tpm_log <- data.frame(log(data.matrix(rnaseq_pao1_tpm)))
+rnaseq_pao1_tpm_log[rnaseq_pao1_tpm_log == -Inf] <- 0
+rnaseq_pao1_tpm_log[rnaseq_pao1_tpm_log < 0] <- 0
+
+
+```
+
+
+Rather than plotting medians, the distributions may be distinguishable my their 25th percentile values.
+
+```{r, warning=F}
+
+#par(mfrow=c(1,2))
+medians <- apply(rnaseq_pao1_tpm_log, 1, FUN = function(x) quantile(x, probs = c(.25,.75,.25,1))[3])
+hist(medians, main = "First Quartile of Experiments  \n (per gene)", xlab = "Gene Expression")
+
+
+```
+A fair number of genes are lowly expressed at least 25% of the time. 
+
+Ww can then expect the distributions of gene expression per experiment to contain a spike at 0, which makes the datasets sparse.
+
+
+
+
+```{r}
+
+#par(mfrow=c(1,2))
+medians <- apply(rnaseq_pao1_tpm_log, 2, FUN = function(x) quantile(x, probs = c(.25,.75,.125,1))[3])
+hist(medians, main = "First 12.5% of Genes PAO1  \n (per experiment)", xlab = "Gene Expression")
+
+
+```
+For most experiments at least 10% of the genes are lowly expressed.
+
+```{r}
+#pdf("peaks_dists.pdf", width=6, height = 3)
+
+#par(mfrow=c(1,2))
+medians <- apply(rnaseq_pao1_tpm_log, 2, FUN = function(x) quantile(x, probs = c(.25,.75,.025,1))[3])
+h1 <- hist(medians, breaks=50, main = "First 2.5% of Genes PAO1  \n (per experiment)", xlab = "Gene Expression")
+#plot(h1)
+abline(v = h1$breaks[2], col='red', lty=2)
+
+#dev.off()
+
+```
+
+
+
+
+Now we can check if the unsparse samples come from the same experiments.
+```{r}
+un_sparse_exps <- sapply( c(1:ncol(rnaseq_pao1_tpm_log)), function(i) { #)
+
+  gene_r <- colnames(rnaseq_pao1_tpm_log)[i]
+
+  h1 <- hist(as.numeric(rnaseq_pao1_tpm_log[,gene_r]), plot = F, breaks=50)
+  
+  #if(h1$counts[1] < max(h1$counts[-1])*0.15){
+  
+  if(h1$density[1] < .1275){
+    ann_exp_groups[i]
+  } else {""}
+})
+
+kable_classic(kable(head(sort(table(un_sparse_exps[un_sparse_exps != '']), decreasing = T), n=10), col.names = c("SRA Experiment","# of unsparse samples"),,
+              caption = "Experiments that contain the most un-sparse samples"
+              ))
+```
+
+
+
+## 4. Genes by Expected patterns
+
+Using genes known to be stable in their expression as a normalization metric is commonly used in qRT analysis and other mRNA quantification techniques. It can provide internal controls and account for technical biases. The same concept can hold true when we look at gene expression across compendia. We can choose housekeeping genes for **P. aeruginosa** based on a publication and examine their expression in the array compendium.
+
+
+
+The following set of HK genes comes from Alqarni et al 2016, J Microbiol Methods. The lowly expressed genes were determined based on expression in the array compendium (see other analyses).
+
+```{r}
+hks <- sapply(c('ppiD','rpoD','rpoS','proC','recA','rpsL','rho','oprL','tipA','nadB'), 
+              function(x) name_to_PAO1(x))
+hks <- hks[hks %in% rownames(rnaseq_pao1_tpm_log)]
+
+lgs <- c('PA2228','PA2227','PA2226','PA2225','PA2223','PA2222',                   
+         'PA0442','PA0498','PA0715','PA0716','PA0984','PA0993')
+lgs <- lgs[lgs %in% rownames(rnaseq_pao1_tpm_log)]
+
+
+```
+
+
+```{r}
+#pdf("hk_genes.pdf", width=6,height=3)
+#par(mfrow=c(1,2))
+hk_means <- apply(rnaseq_pao1_tpm_log[hks,], 2, FUN = function(x) mean(x))
+hist(hk_means, main = 'PAO1-aligned')
+q <- quantile(hk_means, probs = c(.1,.2,.3,.4,.5,.6,.7,.8,.9,1))
+abline(v = q[1], col='red', lty=2)
+abline(v = q[10], col='red', lty=2)
+
+
+#dev.off()
+```
+Overall, the HK genes apepar to be relatively highly expressed and have a fairly narrow range thus allowing for outliers to be excluded based on a band-pass filter.
+
+
+```{r, warning=F}
+#pdf("legs_dists.pdf", width=6,height=3)
+#par(mfrow=c(1,2))
+lg_means <- apply(rnaseq_pao1_tpm_log[lgs,], 2, FUN = function(x) mean(x))
+hist(lg_means, main = 'PAO1-aligned')
+q <- quantile(hk_means, probs = c(.1,.2,.3,.4,.5,.6,.7,.8,.9,1))
+abline(v = q[1], col='red', lty=2)
+#abline(v = q[10], col='red', lty=2)
+
+
+#dev.off()
+```
+Especially in the PAO1-aligned compendium, the genes expected to be lowly expressed based on their expression in the array compendium are indeed lowly expressed, certainly in comparison to housekeeping genes. Although the distribution in less 0-skewed than the PAO1-aligned compendium, it still is lowly expressed compared to the housekeeping genes.
+
+
+```{r, warning=F}
+accessory_compendia <- read.csv('compendia/PAO1_PA14_accessory_expression.csv', stringsAsFactors = F, sep='\t')
+strain <- accessory_compendia$Strain.type_pao1
+temp <- accessory_compendia$X
+
+
+seq_strain_order <- unlist(sapply(colnames(rnaseq_pao1_counts), function(x){
+  num <- substr(x,1,regexpr('.',x, fixed=T)[1]-1)
+  accessory_compendia$Strain.type_pao1[accessory_compendia$X == num][1]
+}))
+seq_strain_order[is.na(seq_strain_order)] <- "No annotation"
+
+
+``` 
+
+## 5. Set Final Criteria
+
+
+
+```{r}
+
+pao1_zeros <- quantile(apply(rnaseq_pao1_tpm[,seq_strain_order == 'PAO1'], 2, FUN = function(x) sum( x  == 0)), probs = c(.2,.975))
+
+
+#pao1_peak = 0.1 # this may need the most adjusting
+
+
+pao1_peak = 0.0 # this may need the most adjusting
+
+
+pao1_hk <- quantile(apply(rnaseq_pao1_tpm_log[hks,], 2, FUN = function(x) mean(x)), probs = c(.025,.975))
+
+```
+
+```{r}
+#pdf('zeros_dists.pdf', width = 6, height=3)
+#par(mfrow=c(1,2))
+hist(log(pao1_seq_zeros), main = 'PAO1')
+#q <- quantile(pao1_seq_zeros, probs = c(.1,.2,.3,.4,.5,.6,.7,.8,.9,.95,1))
+#abline(v = q[1], col='red', lty=2)
+abline(v = log(pao1_zeros[1]), col='red', lty=2)
+abline(v = log(pao1_zeros[2]), col='red', lty=2)
+
+
+#dev.off()
+```
+
+```{r}
+#pdf('zeros_dists_detail.pdf', width = 6, height=3)
+#par(mfrow=c(1,2))
+hist(log(pao1_seq_zeros), main = 'PAO1', breaks=25, xlab = 'log(zeros)')
+q <- quantile(pao1_seq_zeros, probs = c(.1,.2,.3,.4,.5,.6,.7,.8,.9,.95,1))
+abline(v = log(q[1]), col='red', lty=2)
+abline(v = log(q[2]), col='red', lty=2)
+abline(v = log(q[3]), col='red', lty=2)
+abline(v = log(q[4]), col='red', lty=2)
+abline(v = log(q[5]), col='red', lty=2)
+abline(v = log(q[10]), col='red', lty=2)
+#abline(v = log(pao1_zeros[1]), col='red', lty=2)
+#abline(v = log(pao1_zeros[2]), col='red', lty=2)
+
+#dev.off()
+```
+
+
+```{r}
+#pdf('zeros_dists_strain_specific.pdf', width = 6, height=3)
+#par(mfrow=c(1,2))
+hist(log(pao1_seq_zeros[seq_strain_order == 'PAO1']), main = 'PAO1', breaks=25, xlab = 'log(zeros)')
+q <- quantile(pao1_seq_zeros[seq_strain_order == 'PAO1'], probs = c(.1,.2,.3,.4,.5,.6,.7,.8,.9,.95,1))
+abline(v = log(q[1]), col='red', lty=2)
+abline(v = log(q[2]), col='red', lty=2)
+abline(v = log(q[3]), col='red', lty=2)
+abline(v = log(q[4]), col='red', lty=2)
+abline(v = log(q[5]), col='red', lty=2)
+abline(v = log(q[10]), col='red', lty=2)
+#abline(v = log(pao1_zeros[1]), col='red', lty=2)
+#abline(v = log(pao1_zeros[2]), col='red', lty=2)
+
+
+#dev.off()
+```
+
+
+
+
+
+
+
+```{r}
+
+filt_sp_comp_pao1_tpm <- filter_sparsity(rnaseq_pao1_tpm_log[rownames(rnaseq_pao1_tpm),], max_zeros=pao1_zeros[2], min_zeros=pao1_zeros[1], min_peak=pao1_peak)
+
+filt_hk_comp_pao1_tpm <- filter_hks(rnaseq_pao1_tpm_log[rownames(rnaseq_pao1_tpm),], hk_min=pao1_hk[1], hk_max=pao1_hk[2])
+
+out_rnaseq_pao1_tpm <- rnaseq_pao1_tpm[rownames(rnaseq_pao1_tpm), filt_sp_comp_pao1_tpm & filt_hk_comp_pao1_tpm ]
+
+out_rnaseq_pao1_counts <- rnaseq_pao1_counts[rownames(rnaseq_pao1_tpm), filt_sp_comp_pao1_tpm & filt_hk_comp_pao1_tpm ]
+```
+
+
+
+# 6. Plot
+
+```{r}
+source('plotting_functions.R')
+```
+
+```{r, warning=F, message=F}
+#pdf("pao1_heamtap_zp2.pdf", height = 6, width = 12)
+genes_50_r <- sample(rownames(rnaseq_pao1_tpm_log),50)
+ht <- annotated_heatmap(rnaseq_pao1_tpm_log[c(hks,lgs, genes_50_r),],
+                  rnaseq_pao1_counts,
+                  filt_sp_comp_pao1_tpm,
+                  filt_hk_comp_pao1_tpm, anns=T)
+draw(ht,heatmap_legend_side = "bottom")
+#dev.off()
+```
+
+
+
+
+
+
+
+# 7. Summary of filtered datasets
+
+
+
+
+```{r}
+# must meet all PAO1-based criteria
+pao1_t <- table(ann_exp_groups[!
+                                 (filt_sp_comp_pao1_tpm 
+                                  & filt_hk_comp_pao1_tpm)])
+
+
+
+all_t <- table(ann_exp_groups)
+
+ugs <- unique(names(pao1_t))
+
+summ_t <- data.frame('Experiment' = ugs, 'failed_PAO1_crit' = as.numeric(pao1_t[ugs]))
+```
+
+
+
+
+```{r, warning=F}
+kable_classic(kable(summ_t[head(order(summ_t[2], decreasing = T), n=10),], 
+                    row.names = F,
+                    caption = "Experiments containing the 10 most samples that were removed from the final, filtered compendium"))
+```
+
+```{r}
+save_kable(
+  kable_classic(kable(summ_t[head(order(summ_t[,2], decreasing = T), n=Inf),], 
+                    row.names = F,
+                    caption = "Experiments containing the most samples that were removed from the final, filtered compendium")),
+  'temp.pdf',
+  bs_theme = "default",
+  self_contained = TRUE,
+  extra_dependencies = NULL,
+  latex_header_includes = NULL,
+  keep_tex = FALSE,
+  density = 300
+)
+```
+
+
+```{r}
+ann_exp_groups[is.na(ann_exp_groups)] <- "No group"
+all_t_s <- data.frame('groups' = ann_exp_groups,
+                          'strain' = seq_strain_order)
+rownames(all_t_s) <- make.unique(as.character(all_t_s$groups))
+
+summ_t_strain <- data.frame('Experiment' = ugs,'Strain' = all_t_s[ugs,'strain'], 'failed_PAO1_crit' = as.numeric(pao1_t[ugs]))
+
+kable_classic(kable(summ_t_strain[head(order(summ_t_strain[,3], decreasing = T), n=10),], 
+                    row.names = F,
+                    caption = "Experiments containing the most samples that were removed from the final, filtered compendium"))
+
+```
+```{r}
+save_kable(
+  kable_classic(kable(summ_t_strain[head(order(summ_t_strain[,3], decreasing = T), n=Inf),], 
+                    row.names = F,
+                    caption = "Experiments containing the most samples that were removed from the final, filtered compendium")),
+  'temp.pdf',
+  bs_theme = "default",
+  self_contained = TRUE,
+  extra_dependencies = NULL,
+  latex_header_includes = NULL,
+  keep_tex = FALSE,
+  density = 300
+)
+write.csv(summ_t_strain[head(order(summ_t_strain[,6], decreasing = T), n=Inf),],
+          row.names = F,
+          'filter_summary_table_strains_zp2.csv')
+```
+
+
+
+
+```{r}
+pao1_t<- table(ann_exp_groups[!
+                              (filt_sp_comp_pao1_tpm 
+                               & filt_hk_comp_pao1_tpm)])
+
+pao1_b_t<- table(ann_exp_groups[!
+                              (filt_sp_comp_pao1_tpm 
+                               | filt_hk_comp_pao1_tpm)])
+
+pao1_x_t<- table(ann_exp_groups[xor(filt_sp_comp_pao1_tpm, 
+                                filt_hk_comp_pao1_tpm)])
+
+pao1_sp_t <- table(ann_exp_groups[!
+                                 (filt_sp_comp_pao1_tpm 
+                                 )])
+
+
+
+pao1_hk_t <- table(ann_exp_groups[!
+                                 (
+                                  filt_hk_comp_pao1_tpm 
+                                  )])
+
+
+
+
+
+pao1_summ_t <- data.frame('Experiment' = ugs,
+                          'Strain' = all_t_s[ugs,'strain'], 
+                          'pao1_any' = as.numeric(pao1_t[ugs]),
+                          'pao1_both' = as.numeric(pao1_b_t[ugs]),
+                          'pao1_one' = as.numeric(pao1_x_t[ugs]),
+                          'pao1_HK' =  as.numeric(pao1_hk_t[ugs]), 
+                          
+                          'pao1_sparsity' = as.numeric(pao1_sp_t[ugs]),
+                          
+                          'samples_in_exp' = as.numeric(all_t[ugs]))
+
+pao1_summ_t[is.na(pao1_summ_t)] <- 0
+
+kable_classic(kable(pao1_summ_t[head(order(pao1_summ_t[,3], decreasing = T), n=10),], 
+                    row.names = F,
+                    caption = "Experiments containing the most samples that were removed from the final, filtered compendium (PAO1 aligned)"))
+```
+
+```{r}
+save_kable(
+kable_classic(kable(pao1_summ_t[head(order(pao1_summ_t[,3], decreasing = T), n=Inf),], 
+                    row.names = F,
+                    caption = "Experiments containing the most samples that were removed from the final, filtered compendium (PAO1 aligned)")),
+  'temp.pdf',
+  bs_theme = "default",
+  self_contained = TRUE,
+  extra_dependencies = NULL,
+  latex_header_includes = NULL,
+  keep_tex = FALSE,
+  density = 300
+)
+write.csv(pao1_summ_t[head(order(pao1_summ_t[,3], decreasing = T), n=Inf),],
+          row.names = F,
+          'filter_summary_table_breakout_zp2.csv')
+```
+
+
+
+
+
+
+## 8. Write out Data
+
+```{r}
+filter_table_pao1 <- data.frame("sparsity_test" = filt_sp_comp_pao1_tpm,
+                                "housekeeping_genes_test" = filt_hk_comp_pao1_tpm)
+
+
+write.csv(filter_table_pao1,'temp_filter_results_zp7.csv')
+
+```
+
+
+```{r}
+out_rnaseq_pao1_tpm <- rnaseq_pao1_tpm[rownames(rnaseq_pao1_tpm), filt_sp_comp_pao1_tpm & filt_hk_comp_pao1_tpm ]
+out_rnaseq_pao1_counts <- rnaseq_pao1_counts[rownames(rnaseq_pao1_tpm), filt_sp_comp_pao1_tpm & filt_hk_comp_pao1_tpm]
+
+write.csv(out_comp_pao1_tpm, 'pao1_aligned_full_compendium_filtered_tpm_zp7.csv')
+write.csv(out_comp_pao1_tpm, 'pao1_aligned_full_compendium_filtered_no_gene_names_tpm_zp7.csv', row.names = F)
+
+write.csv(out_comp_pao1_counts, 'pao1_aligned_full_compendium_filtered_counts_zp7.csv')
+write.csv(out_comp_pao1_counts, 'pao1_aligned_full_compendium_filtered_no_gene_names_counts_zp7.csv', row.names = F)
+
+
+```
+
+
+
