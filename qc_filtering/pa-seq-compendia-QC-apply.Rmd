@@ -204,23 +204,23 @@ And now, at long last, we shall save these compendia in TPM, counts snf normaliz
 ```{r}
 #### PAO1
 write.csv(out_rnaseq_pao1_tpm, 
-          'out_compendia/pao1_aligned_compendium_p2_filtered_tpm.csv')
+          'qc-out/pao1_aligned_compendium_p2_filtered_tpm.csv')
 
 write.csv(out_rnaseq_pao1_counts, 
-          'out_compendia/pao1_aligned_compendium_p2_filtered_counts.csv')
+          'qc-out/pao1_aligned_compendium_p2_filtered_counts.csv')
 
 write.csv(normalized_counts_pao1, 
-          'out_compendia/pao1_aligned_compendium_p2_filtered_counts_norm.csv')
+          'qc-out/pao1_aligned_compendium_p2_filtered_counts_norm.csv')
 
 #### PA14
 write.csv(out_rnaseq_pa14_tpm, 
-          'out_compendia/pa14_aligned_compendium_p2_filtered_tpm.csv')
+          'qc-out/pa14_aligned_compendium_p2_filtered_tpm.csv')
 
 write.csv(out_rnaseq_pa14_counts, 
-          'out_compendia/pa14_aligned__compendium_p2_filtered_counts.csv')
+          'qc-out/pa14_aligned__compendium_p2_filtered_counts.csv')
 
 write.csv(normalized_counts_pa14, 
-          'out_compendia/pa14_aligned_compendium_p2_filtered_counts_norm.csv')
+          'qc-out/pa14_aligned_compendium_p2_filtered_counts_norm.csv')
 ```
 
 

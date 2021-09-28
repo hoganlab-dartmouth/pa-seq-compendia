@@ -3,8 +3,16 @@
 ## Script name: filter_functions.R
 ##
 ## Description:
+##  Includes functions defined for filtering gene expression data by zeros and hk genes
+##   get_zeros: calculates the values used for thresholds by zeros at percentiles
+##   get_hks: calculates the values used for thresholds by hk gene expression at percentiles
+##   filter_sparsity: applies a band-pass filter on number of zero count genes per sample
+##   filter_hks: applies a band-pass filter on the median hk gene expression per sample
+## 
+##  It also includes helper functions:
+##   hlog: 'safely' tales the log of data replacing -Inf and Nan with 0
+##   MRnorm: sample-wise median of ratio normalization on columns
 ##
-## Args:
 ##
 ## Author: Georgia Doing
 ##
@@ -22,6 +30,7 @@ library(RVenn)
 source('~/Dropbox (Hogan Lab)/Resources/Scripts/fsqn.R')
 
 hlog <- function(df, base=exp(1)){
+  # Description: 'safely' tales the log of data replacing -Inf and Nan with 0
   # df: dataframe of gene expression to be logged
   # base: base for log calculation
   # returns: log of df with happy 0s for 0 or neg values
@@ -32,7 +41,9 @@ hlog <- function(df, base=exp(1)){
 }
 
 MRnorm <- function(data){
+  # Description: sample-wise median of ratio normalization on columns
   # data: dataframe of gene expression counts to be normalized via DESeq2
+  # returns: dataframe normalized to geometric mean of all samples
   meta <- data.frame(experiment = colnames(data))
   dds <- DESeqDataSetFromMatrix(countData = 
                                        ceiling(data), 
@@ -42,30 +53,34 @@ MRnorm <- function(data){
 }
 
 get_zeros <- function(data, lt= .1, ut = .9){
-  # data:
-  # lt:
-  # ut:
+  # Description: calculates the values used for thresholds by zeros at percentiles
+  # data: a dataframe of gene expression data, counts
+  # lt: the percentile used to determine lower bounf
+  # ut: the percentile used to determine upper bound
+  # returns: vector of lower and upper bounds in that order
   quantile(apply(
     data, 2, 
     FUN = function(x) sum( x  == 0)), probs = c(lt,ut))
 }
 
 get_hks <- function(data, hk_genes, lt=.2,ut=.98){
-  # data:
-  # hk_genes:
-  # lt: 
-  # ut:
+  # Description: calculates the values used for thresholds by median hk gene expression at percentiles
+  # lt: the percentile used to determine lower bounf
+  # ut: the percentile used to determine upper bound
+  # returns: vector of lower and upper bounds in that order
   quantile(apply(data[hks_genes,], 
                  2, FUN = function(x) median(x)), probs = c(lt,ut))
 }
 
 filter_hks <- function(data, hk_genes=NA, hk_min=4, hk_max=6){
+  # Description: applies a band-pass filter on the median hk gene expression
   # data: dataframe of gene expression with rownames as gene names
   # hk_genes: array of gene names
   # hk_min: float of minimun mean expression, default 0
   # hk_max: float of maximum mean expression, deafult infinity
   # returns: array of bools for filtering columns of data
   if(is.na(hk_genes)){
+    #HK genes come from Alqarni et al 2016, J Microbiol Methods. 
     hk_genes <- sapply(c('ppiD','rpoD','rpoS','proC','recA','rpsL','rho','oprL','tipA','nadB','ampC'), function(x) name_to_PAO1(x))
   }
   hk_clean <- hk_genes %in% rownames(data)
@@ -81,6 +96,7 @@ filter_hks <- function(data, hk_genes=NA, hk_min=4, hk_max=6){
 }
 
 filter_sparsity <- function(data, max_zeros=1000, min_zeros = 200, min_peak=0){
+  # Description: applies a band-pass filter on the number of zero count genes a sample can have
   # data: dataframe of gene expression with rownames as gene names
   # max_zeros: int of maximum unexpressed gene per sample, default infinity
   # min_peak: float [0-1] of multiplier for peak cutoff, default 1 (0.15 good)
@@ -101,24 +117,3 @@ filter_sparsity <- function(data, max_zeros=1000, min_zeros = 200, min_peak=0){
   return(sparse_filt)
 }
 
-
-
-array_match <- function(a_comp, s_comp, a_ref=T, fsqn=T){
-  dfs <- list(a_comp, s_comp)
-  genes <- lapply(dfs, function(x) rownames(x))
-  genes_venn <- Venn(genes)
-  common_genes <- overlap(genes_venn)
-  if(fsqn){
-    if(a_ref){
-      s_comp_fsqn <- quantileNormalizeByFeature(t(s_comp[common_genes,]),t(a_comp[common_genes,]))
-      comp_bind <- cbind(a_comp[common_genes,],t(s_comp_fsqn))
-    } else{
-      a_comp_fsqn <- quantileNormalizeByFeature(t(a_comp[common_genes,]),t(s_comp[common_genes,]))
-      comp_bind <- cbind(t(a_comp_fsqn),s_comp[common_genes,])
-    }
-  }else{
-    comp_bind <- cbind(a_comp[common_genes,],s_comp[common_genes,])
-  }
-  
-  return(comp_bind)
-}
