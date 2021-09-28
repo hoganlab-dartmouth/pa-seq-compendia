@@ -1,9 +1,9 @@
 #!/bin/bash -l
 
 ################################################################################
-#Script Name: sal_out_collect.pbs
+#Script Name: gene_names.pbs
 #Desription : collect salmon output into matrices
-#Args       : dir, genome, outfile suffix
+#Args       : 
 #Author     : Georgia Doing
 #Date       : 12-18-20
 #Email      : Georgia.Doing.GR@Dartmouth.edu
@@ -11,7 +11,7 @@
 
 #PBS -q default
 #PBS -A NCCC
-#PBS -N sal_out_col
+#PBS -N gene_names
 #PBS -l walltime=00:30:00
 #PBS -l nodes=1:ppn=1
 #PBS -m bea
@@ -24,11 +24,10 @@
 
 cd $PBS_O_WORKDIR
 
-Rscript ../shape_comp/quant_collect.R /dartfs-hpc/scratch/f002bx6/salmon/pao1_cdna_k15/sra_comp \
-../shape_comp/pao1_asm676v1cdna_gene_names.csv \
-pao1_cdna_k15.csv
+conda activate rtest
 
+Rscript ../shape_comp/gene_names_map.R \
+../t_indxs/pao1_genome.fa.gz pao1_gene_names.csv
 
-Rscript ../shape_comp/quant_collect.R /dartfs-hpc/scratch/f002bx6/salmon/pa14_cdna_k15/sra_comp \
-../shape_comp/pa14_gene_names.csv \
-pa14_cdna_k15.csv
+Rscript ../shape_comp/gene_names_map.R \
+../t_indxs/pa14_genome.fa.gz pa14_gene_names.csv

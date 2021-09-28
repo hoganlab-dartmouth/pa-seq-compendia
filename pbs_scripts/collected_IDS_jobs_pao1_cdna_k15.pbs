@@ -1,0 +1,43 @@
+#!/bin/bash
+#######################################################################
+# Script Name:
+# Description:
+#Args:
+#Author: Georgia Doing
+#Date:
+#Email: Georgia.Doing.GR@Dartmouth.edu
+#######################################################################
+
+#PBS -q largeq
+#PBS -A NCCC
+#PBS -N s2so1
+#PBS -l walltime=02:00:00
+#PBS -l nodes=1:ppn=6
+#PBS -m bea
+#PBS -M Georgia.Doing.GR@Dartmouth.edu
+#PBS -t 284,1111,1317,1321,1322,1335,1374,1375,2867%50
+#PBS -j oe
+#PBS -e /dartfs-hpc/scratch/f002bx6/salmon/sra_comp/oe
+#PBS -o /dartfs-hpc/scratch/f002bx6/salmon/sra_comp/oe
+#PBS -l feature='cellk'
+
+cd $PBS_O_WORKDIR
+
+less $PBS_NODEFILE
+mkdir -p /scratch/f002bx6
+mkdir /scratch/f002bx6/$PBS_JOBID
+
+if ../shell_scripts/sra2sal_byx.sh ${PBS_ARRAYID} pao1_cdna_k15 ; then
+    echo $PBS_JOBID quant succeeded
+    du -h --max-depth 1 /scratch/f002bx6
+else
+    rc=0
+    echo $PBS_JOBID quant failed
+    du -h --max-depth 1 /scratch/f002bx6
+    rm -r /scratch/f002bx6/$PBS_JOBID
+    du -h --max-depth 1 /scratch/f002bx6
+    exit 
+    
+fi
+
+exit
