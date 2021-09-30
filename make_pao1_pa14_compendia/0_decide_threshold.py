@@ -29,8 +29,8 @@ import utils
 
 # +
 # Raw (TPM) expression data files
-pao1_expression_filename = "../qc_filtering/qc-out/pa14_aligned_compendium_p2_filtered_counts_norm.csv" #paths.PAO1_GE # Location to "pao1_aligned_rnaseq_compendium_zp2_MRnorm.csv"
-pa14_expression_filename = "../qc_filtering/qc-out/pao1_aligned_compendium_p2_filtered_counts_norm.csv" #paths.PA14_GE # Location to "pa14_aligned_rnaseq_compendium_zp2_MRnorm.csv"
+pao1_expression_filename = "../qc_filtering/qc-out/pao1_aligned_compendium_p2_filtered_counts_norm.csv" 
+pa14_expression_filename = "../qc_filtering/qc-out/pa14_aligned_compendium_p2_filtered_counts_norm.csv"
 
 # File containing table to map sample id to strain name
 sample_to_strain_filename = "Run_Table_Strain_Bool_GD.csv"

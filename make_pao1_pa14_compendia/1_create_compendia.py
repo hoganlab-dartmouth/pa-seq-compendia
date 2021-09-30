@@ -28,7 +28,7 @@ import pandas as pd
 import seaborn as sns
 from textwrap import fill
 import matplotlib.pyplot as plt
-import paths, utils ## REMOVE PATHS
+import utils
 
 # +
 # User defined output filenames
@@ -62,8 +62,8 @@ opp_threshold = 25
 
 # +
 # Expression data files
-pao1_expression_filename = paths.PAO1_GE # Location to "pao1_aligned_rnaseq_compendium_zp2_MRnorm.csv"
-pa14_expression_filename = paths.PA14_GE # Location to "pa14_aligned_rnaseq_compendium_zp2_MRnorm.csv"
+pao1_expression_filename = "../qc_filtering/qc-out/pao1_aligned_compendium_p2_filtered_counts_norm.csv"
+pa14_expression_filename = "../qc_filtering/qc-out/pa14_aligned_compendium_p2_filtered_counts_norm.csv"
 
 # File containing table to map sample id to strain name
 sample_to_strain_filename = "Run_Table_Strain_Bool_GD.csv"
@@ -81,8 +81,8 @@ sample_to_strain_table_full = pd.read_csv(sample_to_strain_filename, index_col=2
 # ## Get core and accessory annotations
 
 # +
-pao1_annot_filename = paths.GENE_PAO1_ANNOT # Location for "PAO1_ID_2_PA14_ID_PAO1ref.csv"
-pa14_annot_filename = paths.GENE_PA14_ANNOT # Location for "PA14_ID_2_PAO1_ID_PA14ref.csv"
+pao1_annot_filename = "PAO1_ID_2_PA14_ID_PAO1ref.csv"
+pa14_annot_filename = "PA14_ID_2_PAO1_ID_PA14ref.csv"
 
 core_acc_dict = utils.get_my_core_acc_genes(
     pao1_annot_filename, pa14_annot_filename, pao1_expression, pa14_expression
