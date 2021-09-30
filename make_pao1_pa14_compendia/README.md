@@ -7,7 +7,7 @@ Whereas samples labeled as PA14 by SRA had high PA14 accessory gene expression.
 
 See plot below where the median expression of PAO1-only genes (PAO1 accessory genes) on the x-axis and the median expression of PA14-only genes (PA14 accessory genes) on the y-axis.
 Each point is a sample.
-![all_samples](https://github.com/greenelab/core-accessory-interactome/blob/master/explore_data/Expression_accessory_genes_all_samples.svg)
+![all_samples](https://github.com/hoganlab-dartmouth/pa-seq-compendia/blob/master/make_pao1_pa14_compendia/Expression_accessory_genes_all_samples.svg)
 
 ## Directory Structure
 | Folder | Description |
