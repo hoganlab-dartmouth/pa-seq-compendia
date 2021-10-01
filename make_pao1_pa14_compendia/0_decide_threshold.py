@@ -191,6 +191,10 @@ pao1_threshold = 25
 f = sns.distplot(pao1_sra, color="#C6A9B5", kde=False)
 f = sns.distplot(non_pao1_sra, color="grey", kde=False)
 plt.axvline(pao1_threshold, 0, 100, color="red")
+plt.title("PAO1 median accessory expression", family="sans-serif", size=16)
+plt.xlabel("median accessory expression", family="sans-serif", size=12)
+plt.ylabel("count", family="sans-serif", size=12)
+f.figure.savefig("pao1_threshold_dist.svg", format="svg", dpi=300)
 
 # +
 # Get PA14 samples that are labeled PA14 and non-PA14
@@ -210,6 +214,10 @@ pa14_threshold = 25
 g = sns.distplot(pa14_sra, color="#895881", kde=False)
 g = sns.distplot(non_pa14_sra, color="grey", kde=False)
 plt.axvline(pa14_threshold, 0, 100, color="red")
+plt.title("PA14 median accessory expression", family="sans-serif", size=16)
+plt.xlabel("median accessory expression", family="sans-serif", size=12)
+plt.ylabel("count", family="sans-serif", size=12)
+g.figure.savefig("pa14_threshold_dist.svg", format="svg", dpi=300)
 
 # **Takeaway:**
 # Looks like using a threshold of 25 TPM separates between SRA-annotated PAO1 samples vs non-PAO1 samples. Similarly for PA14. This is the threshold we'll use to bin samples into PAO1 vs PA14 compendia.
