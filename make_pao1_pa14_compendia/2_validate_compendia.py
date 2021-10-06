@@ -8,9 +8,9 @@
 #       format_version: '1.5'
 #       jupytext_version: 1.9.1
 #   kernelspec:
-#     display_name: Python [conda env:core_acc]
+#     display_name: Python [conda env:make_compendia] *
 #     language: python
-#     name: conda-env-core_acc-py
+#     name: conda-env-make_compendia-py
 # ---
 
 # # Validate new compendia

@@ -9,9 +9,9 @@
 #       format_version: '1.5'
 #       jupytext_version: 1.9.1
 #   kernelspec:
-#     display_name: Python [conda env:core_acc]
+#     display_name: Python [conda env:make_compendia] *
 #     language: python
-#     name: conda-env-core_acc-py
+#     name: conda-env-make_compendia-py
 # ---
 
 # # Cluster by accessory gene expression
@@ -238,7 +238,6 @@ pao1_pa14_acc_expression_label.head()
 
 # +
 # Plot
-# Note: commented out code is for plotting figure for Georgia's manuscript
 colors = {
     "Clinical Isolate": "#89A45E",
     "PA14": "#895881",
@@ -279,6 +278,51 @@ fig3 += pn.guides(
 
 print(fig3)
 fig3.save("Expression_accessory_genes_all_samples.svg", format="svg", dpi=300)
+
+# +
+# Plot
+colors = {
+    "Clinical Isolate": "#89A45E",
+    "PA14": "#895881",
+    "PAK": "#EF8B46",
+    "PAO1": "#C6A9B5",
+    "NA": "#D8DAEB",
+}
+
+fig3a = pn.ggplot(
+    pao1_pa14_acc_expression_label,
+    pn.aes(x="median acc expression_pao1", y="median acc expression_pa14"),
+)
+fig3a += pn.geom_point(
+    pn.aes(color="Strain type_pao1"),
+    alpha=0.3,
+)
+fig3a += pn.scales.scale_x_log10()
+fig3a += pn.scales.scale_y_log10()
+fig3a += pn.scale_color_manual(values=colors)
+fig3a += pn.labs(
+    x="median expression of PAO1-only genes",
+    y="median expression of PA14-only genes",
+    title=r"Estimated counts of accessory genes (log$_{10}$ scale)",
+    width=10,
+)
+fig3a += pn.theme_bw()
+fig3a += pn.theme(
+    legend_title_align="center",
+    plot_background=pn.element_rect(fill="white"),
+    legend_key=pn.element_rect(fill="white", colour="white"),
+    legend_title=pn.element_text(family="sans-serif", size=12),
+    legend_text=pn.element_text(family="sans-serif", size=10),
+    plot_title=pn.element_text(family="sans-serif", size=14),
+    axis_text=pn.element_text(family="sans-serif", size=10),
+    axis_title=pn.element_text(family="sans-serif", size=12),
+)
+fig3a += pn.guides(
+    colour=pn.guide_legend(title="Strain type", override_aes={"alpha": 1})
+)
+
+print(fig3a)
+fig3a.save("Expression_accessory_genes_all_samples_log10.svg", format="svg", dpi=300)
 # -
 
 # **Takeaway:**
