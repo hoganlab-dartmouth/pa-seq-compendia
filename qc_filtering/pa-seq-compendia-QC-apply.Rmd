@@ -34,7 +34,7 @@ In order to ensure the quality of the compendium, we need to impose some heurist
 library(kableExtra)
 source('annotation_functions.R')
 source('filter_functions.R')
-source('plotting_functions.R')
+source('qc-dev/plotting_functions.R')
 ```
 
 
@@ -143,10 +143,10 @@ pa14_zeros <- get_zeros(
 # median hk expression lower and upper thresholds
 pao1_hk <- get_hks(
   rnaseq_pao1_tpm_log[,seq_strain_ann_order == 'PAO1'], 
-  hks_pao1, .2, .98)
+  hks_pao1, .2, .98) #.025,.975 #.2, .98
 pa14_hk <- get_hks(
   rnaseq_pa14_tpm_log[,seq_strain_ann_order == 'PA14'], 
-  hks_pa14, .2,.98)
+  hks_pa14, .2, .98)
 ```
 
 
@@ -165,12 +165,12 @@ filt_hk_pao1 <- filter_hks(rnaseq_pao1_tpm_log, hks_pao1,
 filt_pao1_samp_i <- (filt_sp_pao1 & filt_hk_pao1)
 ## PA14
 filt_sp_pa14 <- filter_sparsity(rnaseq_pa14_tpm_log,
-                                max_zeros=pao1_zeros[2],
+                                max_zeros=pa14_zeros[2],
                                 min_zeros=pa14_zeros[1])
 filt_hk_pa14 <- filter_hks(rnaseq_pa14_tpm_log, hks_pa14,
                            hk_min=pa14_hk[1],
                            hk_max=pa14_hk[2])
-filt_pa14_samp_i <- (filt_sp_comp_pa14_tpm & filt_hk_comp_pa14_tpm)
+filt_pa14_samp_i <- (filt_sp_pa14 & filt_hk_pa14)
 # consolidate to include samples that pass PAO1 or PA14 based criteria
 filt_i <- filt_pao1_samp_i | filt_pa14_samp_i
 ```
@@ -317,30 +317,43 @@ co_df <- data.frame('PAO1_zeros_count' = pao1_seq_zeros,
 Before we go, let's take a quick look at the experiments that make up the compendium after filtering and the experiments that were filtered out.
 
 ```{r}
+ann_exp_groups <- sapply(colnames(rnaseq_pao1_tpm_log), function(x){
+  exp <- if(substr(x,1,regexpr('\\.',x)[1]-1) %in% run_table$Experiment){
+    run_table$SRA_study[ run_table$Experiment == substr(x,1,regexpr('\\.',x)[1]-1)]
+  }   else{
+    "No group"
+  }
+  exp[1]
+  }
+)
+#ann_exp_groups[is.na(ann_exp_groups)] <- "No group"
+```
+
+```{r}
 
 # must meet all PAO1-based  or all PA14-based criteria
 pao1_t <- table(ann_exp_groups[
-                                 (filt_sp_comp_pao1_tpm 
-                                  & filt_hk_comp_pao1_tpm) |
-                                   (filt_sp_comp_pa14_tpm 
-                                  & filt_hk_comp_pa14_tpm)])
+                                 (filt_sp_pao1 
+                                  & filt_hk_pao1) |
+                                   (filt_sp_pa14 
+                                  & filt_hk_pa14)])
 
 pao1_only <- table(ann_exp_groups[
-                                 (filt_sp_comp_pao1_tpm 
-                                  & filt_hk_comp_pao1_tpm) &
-                                   !(filt_sp_comp_pa14_tpm 
-                                  & filt_hk_comp_pa14_tpm) ])
+                                 (filt_sp_pao1 
+                                  & filt_hk_pao1) &
+                                   !(filt_sp_pa14 
+                                  & filt_hk_pa14) ])
 pa14_only <- table(ann_exp_groups[
-                                 (filt_sp_comp_pa14_tpm 
-                                  & filt_hk_comp_pa14_tpm) &
-                                   !(filt_sp_comp_pao1_tpm 
-                                  & filt_hk_comp_pao1_tpm)])
+                                 (filt_sp_pa14 
+                                  & filt_hk_pa14) &
+                                   !(filt_sp_pao1 
+                                  & filt_hk_pao1)])
 
 pao1_both <- table(ann_exp_groups[
-                                 (filt_sp_comp_pao1_tpm 
-                                  & filt_hk_comp_pao1_tpm) &
-                                   (filt_sp_comp_pa14_tpm 
-                                  & filt_hk_comp_pa14_tpm)])
+                                 (filt_sp_pao1 
+                                  & filt_hk_pao1) &
+                                   (filt_sp_pa14 
+                                  & filt_hk_pa14)])
 
 
 
@@ -354,7 +367,7 @@ summ_t <- data.frame('Experiment' = ugs,
                      'passed_crit' = as.numeric(pao1_t[ugs]))
 
 
-ann_exp_groups[is.na(ann_exp_groups)] <- "No group"
+
 all_t_s <- data.frame('groups' = ann_exp_groups,
                           'strain' = seq_strain_order)
 rownames(all_t_s) <- make.unique(as.character(all_t_s$groups))
