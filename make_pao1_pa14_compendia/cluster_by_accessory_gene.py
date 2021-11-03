@@ -243,7 +243,7 @@ colors = {
     "PA14": "#895881",
     "PAK": "#EF8B46",
     "PAO1": "#C6A9B5",
-    "NA": "#D8DAEB",
+    "NA": "grey",
 }
 
 fig3 = pn.ggplot(
@@ -266,11 +266,11 @@ fig3 += pn.theme(
     legend_title_align="center",
     plot_background=pn.element_rect(fill="white"),
     legend_key=pn.element_rect(fill="white", colour="white"),
-    legend_title=pn.element_text(family="sans-serif", size=12),
-    legend_text=pn.element_text(family="sans-serif", size=10),
-    plot_title=pn.element_text(family="sans-serif", size=14),
-    axis_text=pn.element_text(family="sans-serif", size=10),
-    axis_title=pn.element_text(family="sans-serif", size=12),
+    legend_title=pn.element_text(family="sans-serif", size=14),
+    legend_text=pn.element_text(family="sans-serif", size=12),
+    plot_title=pn.element_text(family="sans-serif", size=16),
+    axis_text=pn.element_text(family="sans-serif", size=12),
+    axis_title=pn.element_text(family="sans-serif", size=14),
 )
 fig3 += pn.guides(
     colour=pn.guide_legend(title="Strain type", override_aes={"alpha": 1})
@@ -301,9 +301,9 @@ fig3a += pn.scales.scale_x_log10()
 fig3a += pn.scales.scale_y_log10()
 fig3a += pn.scale_color_manual(values=colors)
 fig3a += pn.labs(
-    x="median expression of PAO1-only genes",
-    y="median expression of PA14-only genes",
-    title=r"Estimated counts of accessory genes (log$_{10}$ scale)",
+    x="median expression (PAO1-only)",
+    y="median expression (PA14-only)",
+    title=r"Accessory gene expression (log$_{10}$ estimated counts)",
     width=10,
 )
 fig3a += pn.theme_bw()
@@ -311,11 +311,11 @@ fig3a += pn.theme(
     legend_title_align="center",
     plot_background=pn.element_rect(fill="white"),
     legend_key=pn.element_rect(fill="white", colour="white"),
-    legend_title=pn.element_text(family="sans-serif", size=12),
-    legend_text=pn.element_text(family="sans-serif", size=10),
-    plot_title=pn.element_text(family="sans-serif", size=14),
-    axis_text=pn.element_text(family="sans-serif", size=10),
-    axis_title=pn.element_text(family="sans-serif", size=12),
+    legend_title=pn.element_text(family="sans-serif", size=14),
+    legend_text=pn.element_text(family="sans-serif", size=12),
+    plot_title=pn.element_text(family="sans-serif", size=16),
+    axis_text=pn.element_text(family="sans-serif", size=12),
+    axis_title=pn.element_text(family="sans-serif", size=14),
 )
 fig3a += pn.guides(
     colour=pn.guide_legend(title="Strain type", override_aes={"alpha": 1})
