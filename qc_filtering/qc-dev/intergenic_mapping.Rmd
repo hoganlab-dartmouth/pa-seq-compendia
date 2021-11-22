@@ -1,0 +1,1135 @@
+---
+title: "Intergenic Mapping"
+output: html_notebook
+author: Georgia Doing georgia.doing.gr@dartmouth.edu
+date crated: 
+date modified: Sys.Date()
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages}
+
+```
+
+Run pa-seq-compendia until you get the following data frames:
+
+comp_pao1_tpm_log
+comp_pa14_tpm_log
+
+pao1_zeros
+pa14_zeros
+
+pao1_peak
+pa14_peak
+
+pao1_hk
+pa14_hk
+
+pao1_med
+pa14_med
+
+This will be easy to do for samples in the compendium, so lets sart with Jack's PAO1 and J215 WT and anr mutant samples (SRP057994).
+
+Let's see how Jack's data stacks up for the different tests and alignemnts
+
+## Median
+
+#### PAO1
+```{r}
+j_data_pao1 <- comp_pao1_tpm_log[, ann_exp_groups == 'SRP057994']
+pao1_med[1]
+pao1_med[2]
+apply(j_data_pao1,2, FUN = function(x) median(x))
+```
+
+#### PA14
+```{r}
+j_data_pa14 <- comp_pa14_tpm_log[, ann_exp_groups == 'SRP057994']
+pa14_med[1]
+pa14_med[2]
+apply(j_data_pa14,2, FUN = function(x) median(x))
+```
+
+## SRP188684
+
+This dataset contains PAO1 transcription factor mutants about half of which failed the QC tests. Since the failures are primarily in the sparsity test, I thought it would be a good test case to see if sparsity associates with alignment to intergenic regions.
+
+The TFs that failed were:
+
+
+FAIL:
+SRX5534351 cdpR-1
+SRX5534352 cdpR-2
+SRX5534355 fleQ-1
+SRX5534356 fleQ-2
+SRX5534357 gacA-1
+SRX5534358 gacA-2
+SRX5534359 gbdR-1
+SRX5534360 gbdR-2
+SRX5534361 lasR-1
+SRX5534362 lasR-2
+SRX5534365 phoB-1
+SRX5534366 phoB-2
+SRX5534367 rsaL-1
+SRX5534368 rsaL-2
+SRX5534369 sphR-1
+SRX5534370 sphR-2
+SRX5534373 PAO1-1
+SRX5534374 PAO1-2
+SRX5534375 PAO1-3
+SRX5534376 PAO1-4
+SRX5860639 WT-qscR-1
+SRX5860640 WT-qscR-2
+SRX5860643 WT-vqsM-1
+SRX5860644 WT-vqsM-2
+
+
+PASS:
+SRX5534349 algR-1
+SRX5534350 algR-2
+SRX5534353 exaA-1
+SRX5534354
+SRX5534363 pchR-1
+SRX5534364
+SRX5534371 vqsR-1
+SRX5534372
+SRX5534377 PAO1-5
+SRX5534378 PAO1-6
+SRX5534379 PAO1-7
+SRX5534380 PAO1-8
+SRX5860641 qscR-1
+SRX5860642 qscR-2
+SRX5860645 vqsM-1
+SRX5860646 vqsM-2
+
+```{r}
+muts <- c( "SRX5534364.SRX5534364.salmon" = "pchR",
+           "SRX5534360.SRX5534360.salmon" = "gbdR2",
+           "SRX5534349.SRX5534349.salmon" = "algR1",
+           "SRX5534350.SRX5534350.salmon" = "algR2",
+           "SRX5534353.SRX5534353.salmon" = "exaA",
+           "SRX5534359.SRX5534359.salmon" = "gdbR1",
+           "SRX5534361.SRX5534361.salmon" = "lasR1",
+           "SRX5534365.SRX5534365.salmon" = "phoB1")
+```
+
+#### PAO1
+```{r}
+j_data_pao1 <- comp_pao1_tpm_log[, ann_exp_groups == 'SRP188684']
+pao1_med[1]
+pao1_med[2]
+apply(j_data_pao1,2, FUN = function(x) median(x))
+```
+
+#### PA14
+```{r}
+j_data_pa14 <- comp_pa14_tpm_log[, ann_exp_groups == 'SRP188684']
+pa14_med[1]
+pa14_med[2]
+apply(j_data_pa14,2, FUN = function(x) median(x))
+```
+
+
+
+## Sparsity
+
+Sparsity is a bit harder to calculate, but fear not, it shall be done!
+
+```{r}
+j_data_pao1 <- comp_pao1_tpm_log[, ann_exp_groups == 'SRP188684']
+pao1_peak
+apply(j_data_pa14,2, FUN = function(x) hist(x, breaks=50,plot=F)$density[1])
+```
+
+
+```{r}
+
+genes_50_r <- sample(rownames(comp_pao1_tpm_nn_log),50)
+annotated_heatmap_filt(comp_pao1_tpm_nn_log[c(hks,lgs, genes_50_r),ann_exp_groups == 'SRP188684'],
+                  comp_pao1_counts[ann_exp_groups == 'SRP188684'],
+                  filt_sp_comp_pao1_tpm[ann_exp_groups == 'SRP188684'],
+                  filt_hk_comp_pao1_tpm[ann_exp_groups == 'SRP188684'],
+                  filt_md_comp_pao1_tpm[ann_exp_groups == 'SRP188684'])
+
+```
+
+
+## Intergenic Mapping Rates
+
+In CLC I have both the PAO1 reference genome as well as the sequences of intergenic regions.
+
+Mapping to the full genome gives a percentage of reads that map to intergenic, but the numbers between the full alignments and the only-intergenic alignments may not match up perfectly...
+
+
+##SRP188684
+```{r}
+interg_mr <- c(
+  "SRX5534364.SRX5534364.salmon" = 0.47 , # SRR8742237 P
+  "SRX5534360.SRX5534360.salmon" = 1.36 , # SRR8742233 F
+  "SRX5534349.SRX5534349.salmon" =  0.13, # SRR8742222 P
+  "SRX5534350.SRX5534350.salmon" =  0.13, # SRR8742223 P
+  "SRX5534353.SRX5534353.salmon" =  0.63, # SRR8742226 P
+  "SRX5534359.SRX5534359.salmon" =  1.43, # SRR8742232 F
+  "SRX5534361.SRX5534361.salmon" =  1.31, # SRR8742234 F
+  "SRX5534365.SRX5534365.salmon" =  1.77 # SRR8742238 F
+)
+
+genome_mr <- c(
+  "SRX5534364.SRX5534364.salmon" = 98.72 , # SRR8742237 P
+  "SRX5534360.SRX5534360.salmon" = 96.11 , # SRR8742233 F
+  "SRX5534349.SRX5534349.salmon" = 99.67 , # SRR8742222 P
+  "SRX5534350.SRX5534350.salmon" = 99.69, # SRR8742223 P
+  "SRX5534353.SRX5534353.salmon" =  98.28 , # SRR8742226 P
+  "SRX5534359.SRX5534359.salmon" =  95.91,  # SRR8742232 F
+  "SRX5534361.SRX5534361.salmon" =  97.05, # SRR8742234 F
+  "SRX5534365.SRX5534365.salmon" =  95.82 # SRR8742238 F
+)
+
+intergene_mr <- 100 - genome_mr
+```
+
+Fort he samples that I re-aligned, get the sparsity peaks and other QC measures.
+
+
+```{r}
+
+temp <- comp_pao1_tpm_log[, names(ann_exp_groups)  %in%  c( "SRX5534364.SRX5534364.salmon" , 
+"SRX5534360.SRX5534360.salmon",
+"SRX5534349.SRX5534349.salmon",
+"SRX5534350.SRX5534350.salmon",
+"SRX5534353.SRX5534353.salmon",
+"SRX5534359.SRX5534359.salmon",
+"SRX5534361.SRX5534361.salmon",
+"SRX5534365.SRX5534365.salmon")]
+```
+
+```{r}
+pdf("heatmap_tfmuts.pdf")
+genes_50_r <- sample(rownames(comp_pao1_tpm_nn_log),50)
+annotated_heatmap_filt(comp_pao1_tpm_nn_log[c(hks,lgs, genes_50_r),colnames(temp)],
+                  comp_pao1_counts[colnames(temp)],
+                  filt_sp_comp_pao1_tpm[colnames(temp)],
+                  filt_hk_comp_pao1_tpm[colnames(temp)],
+                  filt_md_comp_pao1_tpm[colnames(temp)])
+dev.off()
+```
+
+
+```{r}
+temp_meds <- apply(temp,2, FUN = function(x) median(x))
+temp_hks <- apply(temp,2, FUN = function(x) median(x[rownames(temp) %in% hks]))
+temp_peaks <- apply(temp,2, FUN = function(x) hist(x, breaks=50,plot=F)$density[1])
+
+temp_tests_bool <- filt_sp_comp_pao1_tpm[colnames(temp)] #&
+                  #filt_hk_comp_pao1_tpm[colnames(temp)] &
+                  #filt_md_comp_pao1_tpm[colnames(temp)]
+
+sp_tests <- factor(sapply(filt_sp_comp_pao1_tpm[colnames(temp)], function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+med_tests <- factor(sapply(filt_md_comp_pao1_tpm[colnames(temp)], function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+hks_tests <- factor(sapply(filt_hk_comp_pao1_tpm[colnames(temp)], function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+temp_muts <- muts[colnames(temp)]
+```
+
+```{r}
+temp_df <- data.frame("sample" = colnames(temp),
+                      "strain" = temp_muts,
+                      "median" = temp_meds,
+                      "hk_med" = temp_hks,
+                      "percent_reads_low_expression" = temp_peaks,
+                      "intergenic_mapping_rate" = intergene_mr[colnames(temp)],
+                      "ig_mapping_rate" = interg_mr[colnames(temp)],
+                      "sparsity_test" = sp_tests,
+                      "medians_test" = med_tests,
+                      "hk_medians_test" = hks_tests
+)
+
+```
+
+
+```{r}
+g <- ggplot(temp_df, aes(y = intergenic_mapping_rate, x= sparsity_test)) + 
+  geom_boxplot(aes(fill= sparsity_test)) +
+  geom_point() + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+
+g <- ggplot(temp_df, aes(y = intergenic_mapping_rate, x= medians_test)) + 
+  geom_boxplot(aes(fill= medians_test)) +
+  geom_point() + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+
+g <- ggplot(temp_df, aes(y = intergenic_mapping_rate, x= hk_medians_test)) + 
+  geom_boxplot(aes(fill= hk_medians_test)) +
+  geom_point() + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+```
+
+```{r}
+g <- ggplot(temp_df, aes(y = intergenic_mapping_rate, x= percent_reads_low_expression)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= sparsity_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+g <- ggplot(temp_df, aes(y = intergenic_mapping_rate, x= median)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+
+g <- ggplot(temp_df, aes(y = intergenic_mapping_rate, x= hk_med)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= hk_medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+```
+
+```{r}
+g <- ggplot(temp_df, aes(y = ig_mapping_rate, x= percent_reads_low_expression)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= sparsity_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("sparsity_v_ig_map.png")
+g <- ggplot(temp_df, aes(y = ig_mapping_rate, x= percent_reads_low_expression)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= strain)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("sparsity_v_ig_map_strain.png")
+g <- ggplot(temp_df, aes(y = ig_mapping_rate, x= median)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("median_v_ig_map.pdf")
+
+g <- ggplot(temp_df, aes(y = ig_mapping_rate, x= hk_med)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= hk_medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+
+g
+ggsave("hk_median_v_ig_map.pdf")
+```
+
+
+## SRP057994 (Jack's anr experiment)
+
+
+```{r}
+
+anr_exp <- comp_pao1_tpm_log[, ann_exp_groups  == "SRP057994"]
+colnames(anr_exp)
+```
+
+```{r}
+pdf("heatmap_anr.pdf")
+genes_50_r <- sample(rownames(comp_pao1_tpm_nn_log),50)
+annotated_heatmap_filt(comp_pao1_tpm_nn_log[c(hks,lgs, genes_50_r),
+                                            colnames(anr_exp)],
+                  comp_pao1_counts[colnames(anr_exp)],
+                  filt_sp_comp_pao1_tpm[colnames(anr_exp)],
+                  filt_hk_comp_pao1_tpm[colnames(anr_exp)],
+                  filt_md_comp_pao1_tpm[colnames(anr_exp)])
+dev.off()
+```
+
+
+```{r}
+anr_exp_meds <- apply(anr_exp,2, FUN = function(x) median(x))
+anr_exp_hks <- apply(anr_exp,2, FUN = function(x) median(x[rownames(anr_exp) %in% hks]))
+anr_exp_peaks <- apply(anr_exp,2, FUN = function(x) hist(x, breaks=50,plot=F)$density[1])
+
+anr_exp_tests_bool <- filt_sp_comp_pao1_tpm[colnames(anr_exp)] #&
+                  #filt_hk_comp_pao1_tpm[colnames(temp)] &
+                  #filt_md_comp_pao1_tpm[colnames(temp)]
+
+sp_anr_exp <- factor(sapply(filt_sp_comp_pao1_tpm[colnames(anr_exp)], function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+med_anr_exp <- factor(sapply(filt_md_comp_pao1_tpm[colnames(anr_exp)], function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+hks_anr_exp <- factor(sapply(filt_hk_comp_pao1_tpm[colnames(anr_exp)], function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+anr_exp_muts <- rep(c('PAO1','CI'), each=4)
+names(anr_exp_muts) <- colnames(anr_exp)
+```
+#### Intergenic mapping rates
+
+```{r}
+anr_interg_mr <- c(
+  "SRX1017131.SRX1017131.salmon" = 1.04 , # SRR2007326 P
+  "SRX1017132.SRX1017132.salmon" = 1.16 , # SRR2007327 P
+  "SRX1017133.SRX1017133.salmon" = 0.64,  # SRR2007328 P
+  "SRX1017134.SRX1017134.salmon" = 1.39,  # SRR2007329 P
+  "SRX1017135.SRX1017135.salmon" = 2.23,  # SRR2007330 P
+  "SRX1017136.SRX1017136.salmon" = 2.25,  # SRR2007331 P
+  "SRX1017137.SRX1017137.salmon" = 2.17,  # SRR2007332 P
+  "SRX1017138.SRX1017138.salmon" = 2.04   # SRR2007333 P
+)
+
+anr_genome_mr <- c(
+  "SRX1017131.SRX1017131.salmon" = 98.56 , # SRR2007326 P
+  "SRX1017132.SRX1017132.salmon" = 98.41 , # SRR2007327 P
+  "SRX1017133.SRX1017133.salmon" = 99.14,  # SRR2007328 P
+  "SRX1017134.SRX1017134.salmon" = 98.14,  # SRR2007329 P
+  "SRX1017135.SRX1017135.salmon" = 97.13,  # SRR2007330 P
+  "SRX1017136.SRX1017136.salmon" = 98.38,  # SRR2007331 P
+  "SRX1017137.SRX1017137.salmon" = 98.44,  # SRR2007332 P
+  "SRX1017138.SRX1017138.salmon" = 98.46   # SRR2007333 P
+)
+
+anr_intergene_mr <- 100 - anr_genome_mr
+```
+
+
+```{r}
+anr_df <- data.frame("sample" = colnames(anr_exp),
+                      "strain" = anr_exp_muts,
+                      "median" = anr_exp_meds,
+                      "hk_med" = anr_exp_hks,
+                      "percent_reads_low_expression" = anr_exp_peaks,
+                      "intergenic_mapping_rate" = anr_intergene_mr[colnames(anr_exp)],
+                      "ig_mapping_rate" = anr_interg_mr[colnames(anr_exp)],
+                      "sparsity_test" = sp_anr_exp,
+                      "medians_test" = med_anr_exp,
+                      "hk_medians_test" = hks_anr_exp
+)
+
+```
+
+
+```{r}
+g <- ggplot(anr_df, aes(y = intergenic_mapping_rate, x= percent_reads_low_expression)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= sparsity_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+
+g <- ggplot(anr_df, aes(y = intergenic_mapping_rate, x= percent_reads_low_expression)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= strain)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+g <- ggplot(anr_df, aes(y = intergenic_mapping_rate, x= median)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+
+g <- ggplot(anr_df, aes(y = intergenic_mapping_rate, x= hk_med)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= hk_medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+```
+
+```{r}
+g <- ggplot(anr_df, aes(y = ig_mapping_rate, x= percent_reads_low_expression)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= sparsity_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("sparsity_v_ig_map_anr.png")
+g <- ggplot(anr_df, aes(y = ig_mapping_rate, x= median)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("median_v_ig_map_anr.pdf")
+
+g <- ggplot(anr_df, aes(y = ig_mapping_rate, x= hk_med)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= hk_medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+
+g
+ggsave("hk_median_v_ig_map_anr.pdf")
+```
+
+## SRP214490
+
+This experiment is a set of clinical isolates from the Haussler lab for which 60 and 94 of 191 failed PAO1 and PA14 sparsity tests respectively. I selected samples that passed as well as samples that failed only sparsity and samples that failed both sparsity and median tests to add to the intergenic mapping analysis. I am hoping these samples will give me a better idea of where to draw the peak threshold that would include more samples but still ensure some level of quality. 
+
+
+SRX6437759
+SRX6437777
+SRX6437780
+SRX6437783
+SRX6437782
+SRX6437784
+SRX6437785
+SRX6437793
+SRX6437792
+SRX6437794
+SRX6437668
+SRX6437648
+
+```{r}
+ci_exp <- comp_pao1_tpm_log[, names(ann_exp_groups)  %in%  c(   "SRX6437759.SRX6437759.salmon",                                                 "SRX6437777.SRX6437777.salmon",                                                 "SRX6437780.SRX6437780.salmon",                                              "SRX6437783.SRX6437783.salmon",                                              "SRX6437782.SRX6437782.salmon",                                              "SRX6437784.SRX6437784.salmon",                                              "SRX6437785.SRX6437785.salmon",                                              "SRX6437792.SRX6437792.salmon",                                              "SRX6437794.SRX6437794.salmon",                                              "SRX6437668.SRX6437668.salmon",                                              "SRX6437648.SRX6437648.salmon",                                              "SRX6437793.SRX6437793.salmon")]
+```
+
+
+```{r}
+ci_interg_mr <- c(
+  "SRX6437759.SRX6437759.salmon" = 12.43 , # SRR9677388 P
+  "SRX6437777.SRX6437777.salmon" = 14.79 , # SRR9677334 F
+  "SRX6437780.SRX6437780.salmon" = 15.65,  # SRR9677337 P
+  "SRX6437783.SRX6437783.salmon" = 11.97,  # SRR9677340 P
+  "SRX6437782.SRX6437782.salmon" = 12.72,  # SRR9677339 P
+  "SRX6437784.SRX6437784.salmon" = 18.04,  # SRR9677341 P
+  "SRX6437785.SRX6437785.salmon" = 11.28,  # SRR9677342 P
+  "SRX6437792.SRX6437792.salmon" = 14.33,  # SRR9677349 F
+  "SRX6437794.SRX6437794.salmon" = 12.98,  # SRR9677351 P
+  "SRX6437668.SRX6437668.salmon" = 13.65,  # SRR9677417 F
+  "SRX6437648.SRX6437648.salmon" = 5.17 + 7.84,  # SRR9677468 F
+  "SRX6437793.SRX6437793.salmon" = 12.29   # SRR9677350 P
+)
+
+ci_genome_mr <- c(
+  "SRX6437759.SRX6437759.salmon" = 78.59 , # SRR9677388 P
+  "SRX6437777.SRX6437777.salmon" = 75.16 , # SRR9677334 F
+  "SRX6437780.SRX6437780.salmon" = 76.35,  # SRR9677337 P
+  "SRX6437783.SRX6437783.salmon" = 80.50,  # SRR9677340 P
+  "SRX6437782.SRX6437782.salmon" = 77.85,  # SRR9677339 P
+  "SRX6437784.SRX6437784.salmon" = 93.88,  # SRR9677341 P
+  "SRX6437785.SRX6437785.salmon" = 77.55,  # SRR9677342 P
+  "SRX6437792.SRX6437792.salmon" = 72.88,  # SRR9677349 F
+  "SRX6437794.SRX6437794.salmon" = 76.91,  # SRR9677351 P
+  "SRX6437668.SRX6437668.salmon" = 74.57,  # SRR9677417 F
+  "SRX6437648.SRX6437648.salmon" = 84.16,  # SRR9677468 F
+  "SRX6437793.SRX6437793.salmon" = 77.14   # SRR9677350 P
+)
+
+ci_intergene_mr <- 100 - ci_genome_mr
+```
+
+
+```{r}
+ci_exp_meds <- apply(ci_exp,2, FUN = function(x) median(x))
+ci_exp_hks <- apply(ci_exp,2, FUN = function(x) median(x[rownames(ci_exp) %in% hks]))
+ci_exp_peaks <- apply(ci_exp,2, FUN = function(x) hist(x, breaks=50,plot=F)$density[1])
+
+ci_exp_tests_bool <- filt_sp_comp_pao1_tpm[colnames(ci_exp)] #&
+                  #filt_hk_comp_pao1_tpm[colnames(temp)] &
+                  #filt_md_comp_pao1_tpm[colnames(temp)]
+
+sp_ci_exp <- factor(sapply(filt_sp_comp_pao1_tpm[colnames(ci_exp)], function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+med_ci_exp <- factor(sapply(filt_md_comp_pao1_tpm[colnames(ci_exp)], function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+hks_ci_exp <- factor(sapply(filt_hk_comp_pao1_tpm[colnames(ci_exp)], function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+ci_zeros <- apply(rnaseq_pao1_counts[,colnames(ci_exp)], 2, FUN = function(x) sum(x == 0))
+
+
+
+pao1_zeros_low <- quantile(apply(comp_pao1_tpm[,c(ncol(array_comp):ncol(comp_pao1_tpm))], 2, FUN = function(x) sum( x  == 0)), probs = c(.25))
+
+ci_zeros_counts <- sapply(ci_zeros, function(x) x > pao1_zeros_low)
+
+zeros_ci_exp <- factor(sapply(ci_zeros_counts, function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+
+ci_exp_muts <- rep('CI',ncol(ci_exp))
+names(ci_exp_muts) <- colnames(ci_exp)
+```
+
+```{r}
+ci_df <- data.frame("sample" = colnames(ci_exp),
+                      "strain" = ci_exp_muts,
+                      "median" = ci_exp_meds,
+                      "hk_med" = ci_exp_hks,
+                      "percent_reads_low_expression" = ci_exp_peaks,
+                      "intergenic_mapping_rate" = ci_intergene_mr[colnames(ci_exp)],
+                      "ig_mapping_rate" = ci_interg_mr[colnames(ci_exp)],
+                      "sparsity_test" = sp_ci_exp,
+                      "medians_test" = med_ci_exp,
+                    "zeros" = ci_zeros,
+                    "zeros_test" = zeros_ci_exp,
+                      "hk_medians_test" = hks_ci_exp
+)
+
+```
+
+
+```{r}
+g <- ggplot(ci_df, aes(y = intergenic_mapping_rate, x= percent_reads_low_expression)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= sparsity_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+g <- ggplot(ci_df, aes(y = ig_mapping_rate, x= median)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+
+g <- ggplot(ci_df, aes(y = intergenic_mapping_rate, x= hk_med)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= hk_medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+
+g <- ggplot(ci_df, aes(y = ig_mapping_rate, x= zeros)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= zeros_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+```
+
+```{r}
+g <- ggplot(ci_df, aes(y = ig_mapping_rate, x= percent_reads_low_expression)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= sparsity_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+#ggsave("sparsity_v_ig_map_anr.png")
+g <- ggplot(ci_df, aes(y = ig_mapping_rate, x= median)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+#ggsave("median_v_ig_map_anr.pdf")
+
+g <- ggplot(ci_df, aes(y = ig_mapping_rate, x= hk_med)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= hk_medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+
+g
+#ggsave("hk_median_v_ig_map_anr.pdf")
+```
+## Functions
+
+```{r}
+get_exp_names <- function(xnums){
+  xnames <- paste(xnums, xnums, 'salmon',sep='.')
+}
+```
+
+```{r}
+
+get_test_results <- function(temp_df){
+  
+  temp_df_meds <- apply(temp_df,2, FUN = function(x) median(x))
+  temp_df_hks <- apply(temp_df,2, 
+                       FUN = function(x){
+                         median(x[rownames(temp_df) %in% hks])
+                       }
+  )
+                         
+  temp_df_peaks <- apply(temp_df,2, 
+                         FUN = function(x) hist(x,breaks=50,plot=F)$density[1])
+
+  sp_temp_df <- factor(sapply(filt_sp_comp_pao1_tpm[colnames(temp_df)], 
+                              function(x) if(x){"PASS"}else{"FAIL"}),
+                       levels = c("PASS","FAIL"))
+
+  med_temp_df <- factor(sapply(filt_md_comp_pao1_tpm[colnames(temp_df)], 
+                             function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+  hks_temp_df <- factor(sapply(filt_hk_comp_pao1_tpm[colnames(temp_df)], 
+                             function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+  temp_df_zeros <- apply(rnaseq_pao1_counts[,colnames(temp_df)], 2, FUN = 
+                         function(x) sum(x == 0))
+
+  temp_df_zeros_counts <- sapply(temp_df_zeros, function(x) x > pao1_zeros_low)
+
+  zeros_temp_df_zeros <- factor(sapply(temp_df_zeros, 
+                                     function(x) 
+                                       if(x > pao1_zeros_low){"PASS"}
+                                     else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+
+temp_df_out <- data.frame("sample" = colnames(temp_df),
+                      "median" = temp_df_meds,
+                      "hk_med" = temp_df_hks,
+                      "percent_reads_low_expression" = temp_df_peaks,
+                      "sparsity_test" = sp_temp_df,
+                      "medians_test" = med_temp_df,
+                    "zeros" = temp_df_zeros,
+                    "zeros_test" = zeros_temp_df_zeros,
+                      "hk_medians_test" = hks_temp_df
+)
+}
+```
+
+```{r}
+get_results_plots <- function(results_df, trans="identity"){
+  melt_test <- melt(results_df, id.vars = c("sample",
+                                               "intergenic_mapping_rate",
+                                               "strain",
+                                               "sparsity_test",
+                                               "medians_test",
+                                               "zeros_test",
+                                               "hk_medians_test"
+                                               ))
+  g <- ggplot(melt_test, aes(y = intergenic_mapping_rate, x= value)) + 
+    #geom_boxplot(aes(fill= sparse_test)) +
+    geom_point(aes(color= sparsity_test)) + #aes(color= pao1_test)
+    theme_bw() +
+    scale_fill_brewer(palette="Dark2") +
+    scale_color_brewer(palette="Dark2") +
+    facet_wrap(~variable, scales = "free") +
+    scale_x_continuous(trans=trans) +
+    scale_y_continuous(trans=trans)
+  g
+  
+}
+```
+
+
+
+## SRP287307
+
+```{r}
+qs_muts <- c('SRX9288350', #SRR12820655 17.05
+             'SRX9288339', #SRR12820666 9.40
+             'SRX9288355', #SRR12820650 15.81
+             'SRX9288354', #SRR12820651 16.18
+             'SRX9288331', #SRR12820674 15.54
+             'SRX9288353', #SRR12820652 17.23
+             'SRX9288352', #SRR12820653 16.90
+             'SRX9288351', #SRR12820654 17.32
+             'SRX9288337', #SRR12820668 17.33
+             'SRX9288336', #SRR12820669 17.35
+             'SRX9288335', #SRR12820670 17.80
+             'SRX9288334', #SRR12820671 19.39
+             'SRX9288333', #SRR12820672 17.80
+             'SRX9288332', #SRR12820673 17.93
+             'SRX9288330', #SRR12820675 15.00 - dummy
+             'SRX9288329', #SRR12820676 21.11
+             'SRX9288341'  #SRR12820664 21.00
+             )
+qs_names <- get_exp_names(qs_muts)
+qs_names_c <- qs_names[qs_names %in% colnames(comp_pao1_tpm_log)]
+qs_exp <- comp_pao1_tpm_log[,qs_names_c]
+```
+
+```{r}
+qs_interg_mr <- c(17.05,
+                  9.40,
+                  15.81,
+                  16.18,
+                  15.54,
+                  17.23,
+                  16.90,
+                  17.32,
+                  17.33,
+                  17.35,
+                  17.80,
+                  19.39,
+                  17.80,
+                  17.93,
+                  15.00, #- dummy
+                  21.11,
+                  21.00
+             )
+names(qs_interg_mr) <- qs_names
+```
+
+```{r}
+qs_test_results <- get_test_results(qs_exp)
+qs_test_results$intergenic_mapping_rate <- qs_interg_mr[colnames(qs_exp)]
+qs_test_results$strain <- rep('PAO1',ncol(qs_exp))
+```
+
+```{r}
+
+g <- get_results_plots(qs_test_results, trans="log2")
+g
+```
+
+```{r}
+tf_test_results <- get_test_results(temp)
+tf_test_results$intergenic_mapping_rate <- intergene_mr[colnames(temp)]
+tf_test_results$strain <- muts
+get_results_plots(tf_test_results)
+get_results_plots(tf_test_results, trans="log10")
+```
+
+
+## Joint Experiments
+
+```{r}
+meta <- cbind(temp, anr_exp, ci_exp, qs_exp)
+```
+
+```{r}
+meta_test_results <- get_test_results(meta)
+
+meta_test_results$intergenic_mapping_rate <- c(interg_mr[colnames(temp)], 
+                                                 anr_interg_mr[colnames(anr_exp)], 
+                                                 ci_interg_mr[colnames(ci_exp)], 
+                                                 qs_interg_mr[colnames(qs_exp)])
+
+meta_test_results$strain <- as.character(c(muts[colnames(temp)], 
+                                           anr_exp_muts[colnames(anr_exp)], 
+                                           ci_exp_muts[colnames(ci_exp)], 
+                                           rep('PAO1',ncol(qs_exp))))
+```
+
+
+```{r}
+get_results_plots(meta_test_results)
+ggsave("meta_results.png")
+get_results_plots(meta_test_results, trans="log10")
+ggsave("meta_results_log.png")
+
+get_results_plots(meta_test_results[meta_test_results$strain == 'CI',])
+ggsave("meta_results_CI.png")
+get_results_plots(meta_test_results[meta_test_results$strain == 'CI',],
+                  trans="log10")
+ggsave("meta_results_CI_log.png")
+get_results_plots(meta_test_results[meta_test_results$strain != 'CI',])
+ggsave("meta_results_PAO1.png")
+get_results_plots(meta_test_results[meta_test_results$strain != 'CI',],
+                  trans="log10")
+ggsave("meta_results_PAO1_log.png")
+```
+
+
+```{r}
+pdf("heamtap_meta.pdf")
+genes_50_r <- sample(rownames(comp_pao1_tpm_nn_log),50)
+annotated_heatmap_filt(comp_pao1_tpm_nn_log[c(hks,lgs, genes_50_r),
+                                            colnames(meta)],
+                  comp_pao1_counts[colnames(meta)],
+                  filt_sp_comp_pao1_tpm[colnames(meta)],
+                  filt_hk_comp_pao1_tpm[colnames(meta)],
+                  filt_md_comp_pao1_tpm[colnames(meta)])
+dev.off()
+```
+
+```{r}
+meta_meds <- apply(meta,2, FUN = function(x) median(x))
+meta_hks <- apply(meta,2, FUN = function(x) median(x[rownames(meta) %in% hks]))
+meta_peaks <- apply(meta,2, FUN = function(x) hist(x, breaks=50,plot=F)$density[1])
+
+meta_tests_bool <- filt_sp_comp_pao1_tpm[colnames(meta)] #&
+                  #filt_hk_comp_pao1_tpm[colnames(temp)] &
+                  #filt_md_comp_pao1_tpm[colnames(temp)]
+
+sp_meta <- factor(sapply(filt_sp_comp_pao1_tpm[colnames(meta)], function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+med_meta <- factor(sapply(filt_md_comp_pao1_tpm[colnames(meta)], function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+hks_meta <- factor(sapply(filt_hk_comp_pao1_tpm[colnames(meta)], function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+meta_zeros <- apply(rnaseq_pao1_counts[,colnames(meta)], 2, FUN = function(x) sum(x == 0))
+
+
+meta_zeros_counts <- sapply(meta_zeros, function(x) x > pao1_zeros_low)
+
+zeros_meta_exp <- factor(sapply(meta_zeros_counts, function(x) if(x){"PASS"}else{"FAIL"}),
+                        levels = c("PASS","FAIL"))
+
+
+meta_muts <- c(rep('PAO1',length(temp_muts)), anr_exp_muts, ci_exp_muts)
+```
+#### Intergenic mapping rates
+
+```{r}
+meta_mr <- c(anr_interg_mr, interg_mr, ci_interg_mr
+)
+meta_intergene_mr <- c(anr_intergene_mr,intergene_mr, ci_intergene_mr)
+```
+
+
+```{r}
+meta_df <- data.frame("sample" = colnames(meta),
+                      "strain" = meta_muts,
+                      "median" = meta_meds,
+                      "hk_med" = meta_hks,
+                      "percent_reads_low_expression" = meta_peaks,
+                      "intergenic_mapping_rate" = meta_intergene_mr[colnames(meta)],
+                      "ig_mapping_rate" = meta_mr[colnames(meta)],
+                      "sparsity_test" = sp_meta,
+                      "medians_test" = med_meta,
+                       "zeros" = meta_zeros,
+                    "zeros_test" = zeros_meta_exp,
+                      "hk_medians_test" = hks_meta
+)
+
+```
+
+
+```{r}
+
+g <- ggplot(meta_df, aes(y = intergenic_mapping_rate, x= percent_reads_low_expression)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= sparsity_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("sparsity_v_intregenic_map_meta.png")
+
+
+g <- ggplot(meta_df, aes(y = ig_mapping_rate, x= percent_reads_low_expression)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= sparsity_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("sparsity_v_ig_map_meta.png")
+
+g <- ggplot(meta_df, aes(y = ig_mapping_rate, x= median)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("median_v_ig_map_meta.pdf")
+
+g <- ggplot(meta_df, aes(y = ig_mapping_rate, x= hk_med)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= hk_medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+
+g
+ggsave("hk_med_v_ig_map_meta.pdf")
+
+g <- ggplot(meta_df, aes(y = ig_mapping_rate, x= zeros)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= zeros_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("zeros_v_ig_map_meta.pdf")
+
+g <- ggplot(meta_df, aes(y = intergenic_mapping_rate, x= zeros)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= zeros_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("zeros_v_intergenic_map_meta.pdf")
+
+g <- ggplot(meta_df, aes(y = intergenic_mapping_rate, x= zeros)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= strain)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("zeros_v_intergenic_map_meta_strain.pdf")
+
+g <- ggplot(meta_df, aes(y = intergenic_mapping_rate, x= zeros)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= zeros_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+
+g
+ggsave("zeros_v_intergenic_map_meta.pdf")
+
+g <- ggplot(meta_df, aes(y = intergenic_mapping_rate, x= zeros)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= strain)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("zeros_v_intergenic_map_meta_strain.pdf")
+
+
+g <- ggplot(meta_df[meta_df$strain == 'PAO1',], aes(y = intergenic_mapping_rate, x= zeros)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= zeros_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+
+g
+ggsave("zeros_v_intergenic_map_meta_pao1.pdf")
+
+g <- ggplot(meta_df[meta_df$strain == 'PAO1',], aes(y = intergenic_mapping_rate, x= percent_reads_low_expression)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= sparsity_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("peak_v_intergenic_map_meta_pao1.pdf")
+
+g <- ggplot(meta_df[meta_df$strain == 'PAO1',], aes(y = intergenic_mapping_rate, x= median)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("median_v_intergenic_map_meta_pao1.pdf")
+
+g <- ggplot(meta_df[meta_df$strain != 'PAO1',], aes(y = intergenic_mapping_rate, x= median)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("median_v_intergenic_map_meta_CI.pdf")
+
+g <- ggplot(meta_df, aes(y = intergenic_mapping_rate, x= median)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= medians_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+g
+ggsave("median_v_intergenic_map_meta.pdf")
+
+g <- ggplot(meta_df[meta_df$strain != 'PAO1',], aes(y = intergenic_mapping_rate, x= zeros)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= zeros_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+
+g
+ggsave("zeros_v_intergenic_map_meta_CI.pdf")
+
+g <- ggplot(meta_df[meta_df$strain != 'PAO1',], aes(y = intergenic_mapping_rate, x= percent_reads_low_expression)) + 
+  #geom_boxplot(aes(fill= sparse_test)) +
+  geom_point(aes(color= sparsity_test)) + #aes(color= pao1_test)
+  theme_bw() +
+  scale_fill_brewer(palette="Dark2") +
+  scale_color_brewer(palette="Dark2")
+
+g
+ggsave("peak_v_intergenic_map_meta_CI.pdf")
+```
+
+Unfortunately, the correlation between peak size and intergenic alignment is more clear when using the intergenic mapping rates derived from the whole genome alignments and not the intergenic only alignments. I expected differences based on reads that would or would not align to an area of the genome that spans a coding region and an intergenic region, but I was hoping the intergenic-only reference would produce a good enough proxy since it runs much faster. But, while the trends looked good within SRP188684, an experiment with TF muts where some passed and some failed sparsity, when I included Jack's anr data for which all samples passed sparsity, the intergenic-only alignments did not match as well with the full-alignment based results.
+
+Double unfortunately, when I included samples from more experiments, the correlation between peak height and intergenic mapping rate since to be completely obliterated.
+
+I want to take a quick look at the distributions of these particular samples.
+
+
+```{r}
+hist(rnaseq_pao1_counts[,colnames(anr_exp)[1]])
+hist(log(rnaseq_pao1_counts[,colnames(anr_exp)[1]]), breaks=50)
+hist(rnaseq_pao1_tpm[,colnames(anr_exp)[1]])
+t <- log(rnaseq_pao1_tpm[,colnames(anr_exp)[1]])
+t[t == -Inf] <- 0
+t[t < 0] <- 0
+hist(t,breaks=50)
+```
+
+```{r}
+#comp_pao1_tpm_log
+#comp_pao1_tpm
+
+hist(comp_pao1_tpm_log[,colnames(anr_exp)[1]], breaks = 50)
+
+hist(comp_pao1_tpm_log[,colnames(ci_exp)[1]],breaks=50)
+
+
+sd(comp_pao1_tpm_log[,colnames(anr_exp)[1]][comp_pao1_tpm_log[,colnames(anr_exp)[1]] > -1])
+sd(comp_pao1_tpm_log[,colnames(ci_exp)[1]][comp_pao1_tpm_log[,colnames(ci_exp)[1]] > -1])
+
+sd(comp_pao1_tpm_log[,colnames(anr_exp)[1]][comp_pao1_tpm_log[,colnames(anr_exp)[1]] > 0])
+sd(comp_pao1_tpm_log[,colnames(ci_exp)[1]][comp_pao1_tpm_log[,colnames(ci_exp)[1]] > 0])
+```
+
+```{r}
+hist(rnaseq_pao1_counts[,colnames(ci_exp)[1]])
+hist(log(rnaseq_pao1_counts[,colnames(ci_exp)[1]]))
+hist(rnaseq_pao1_tpm[,colnames(ci_exp)[1]])
+hist(log(rnaseq_pao1_tpm[,colnames(ci_exp)[1]]))
+```
+
+```{r}
+sum(rnaseq_pao1_counts[,colnames(ci_exp)[1]] == 0)
+sum(rnaseq_pao1_counts[,colnames(anr_exp)[1]] == 0)
+sum(rnaseq_pao1_counts[,colnames(temp)[1]] == 0)
+```
+
+```{r}
+hist(sapply(rnaseq_pao1_counts[,colnames(ci_exp)], function(x) sum(x == 0)))
+hist(sapply(rnaseq_pao1_counts[,colnames(anr_exp)], function(x) sum(x == 0)))
+hist(sapply(rnaseq_pao1_counts[,colnames(temp)], function(x) sum(x == 0)))
+```
+
