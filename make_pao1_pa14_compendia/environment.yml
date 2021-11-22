@@ -1,0 +1,42 @@
+name: make_compendia
+channels:
+- conda-forge
+- r
+- bioconda
+dependencies:
+- r::r=3.6.0
+- r::r-flashClust=1.01-2
+- r::r-stringi
+- bioconda::blast
+- bioconda::r-wgcna=1.69
+- bioconda::sra-tools=2.10.9
+- bioconda::salmon=0.11.2
+- conda-forge::python=3.7
+- conda-forge::notebook
+- conda-forge::pandas=1.1.0
+- conda-forge::seaborn=0.11.1
+- conda-forge::scipy=1.1.0
+- conda-forge::numpy=1.19.5
+- conda-forge::plotnine=0.5.1
+- conda-forge::scikit-learn
+- conda-forge::umap-learn=0.4.2
+- conda-forge::numba=0.50.1
+- conda-forge::ipykernel=5.1.1
+- conda-forge::nb_conda_kernels
+- conda-forge::gxx_linux-64
+- conda-forge::clang_osx-64
+- conda-forge::libiconv=1.15
+- conda-forge::biopython
+- conda-forge::python-igraph=0.7.1
+- pip=19.2.1
+- pip:
+  - matplotlib==3.0.0
+  - matplotlib-venn
+  - black==20.8b1
+  - flake8==3.8.4
+  - pre_commit==2.9.3
+  - jupytext==1.9.1
+  - rpy2 == 3.0.1
+  - hdbscan == 0.8.27
+  - fastcluster == 1.1.28
+  - tzlocal == 2.1
