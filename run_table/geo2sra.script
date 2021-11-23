@@ -1,0 +1,68 @@
+#!/bin/bash -l
+
+################################################################################
+#Script Name: geo2sra.script
+#Desription : create transcriptome indices from cdna fasta
+#Args       : None 
+#Author     : Georgia Doing
+#Date       : 10-25-21
+#Email      : Georgia.Doing.GR@Dartmouth.edu
+################################################################################
+
+#SBATCH --job-name=sal_t_index
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --time=06:00:00
+#SBATCH --mail-user=georgia.doing.gr@dartmouth.edu
+#SBATCH --mail-type=END,FAIL
+
+
+cd ~/pa-seq-compendia/run_table
+
+#conda activate salmon
+rm -r -f  ./geo_comp
+
+mkdir ./geo_comp
+
+echo "output"
+
+readarray -t studs < GSE_studies.txt
+
+echo "${studs[@]}"
+
+for s in "${studs[@]}"
+
+do
+
+echo $s
+
+readarray -t exps < <(esearch -db gds -query "$s[ACCN] AND GSM[ETYP]" | efetch -format docsum | xtract -pattern ExtRelation -element TargetObject)
+
+mkdir ./geo_comp/$s
+
+for x in "${exps[@]}"
+
+do
+
+#echo $x
+
+mkdir ./geo_comp/$s/$x
+
+study_id=$x
+
+base='https://eutils.ncbi.nlm.nih.gov/entrez/eutils/'
+db=sra
+data="`wget -qO- "${base}esearch.fcgi?db=${db}&term=${study_id}&usehistory=y"`"
+#data= esearch -db sra -query "$study_id[ACCN]" 
+
+web=$(grep -oPm1 "(?<=<WebEnv>)[^<]+" <<< "${data}")
+key=$(grep -oPm1 "(?<=<QueryKey>)[^<]+" <<< "${data}")
+
+wget -qO "./geo_comp/$s/$x/$x.txt"  "${base}efetch.fcgi?db=${db}&query_key=${key}&WebEnv=${web}&retmode=text&rettype=acclist"
+
+sleep 5
+
+done
+done
+
+echo "done"
