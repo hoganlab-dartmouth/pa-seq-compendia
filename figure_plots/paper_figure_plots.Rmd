@@ -1,0 +1,315 @@
+---
+title: "Plots for the compendium paper"
+output: html_notebook
+author: Georgia Doing
+date: Sept 28, 2021
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, warning = F, message=F
+)
+```
+
+
+
+## Setup
+```{r, include=F}
+library(ggplot2)
+library(reshape2)
+library(ggprism)
+library(ggpubr)
+library(ggpmisc)
+library(scales)
+source('../qc_filtering/annotation_functions.R', chdir = T)
+```
+
+
+
+## Figure 1
+
+This figure illustrates the salmon mapping parameters that worked bets for mapping *P. aeruginosa* rna-seq data.
+
+### 1A Salmon mapping parameters
+
+
+This data was from Jake's rotation repo [sraProcessingPipeline](https://github.com/hoganlab-dartmouth/sraProcessingPipeline) .
+```{r}
+sal_clc_data <- read.csv('../salmon_params/salmon_clc_df.csv', stringsAsFactors = F,
+                         row.names=1)
+```
+
+
+We want to plot the results of mapping in paired and unpaired modes for att 4 samples in this tester dataset together.
+
+```{r, warning=FALSE, message=F}
+# prepare long format for ggplot2
+sal_clc_data_melt <- melt(sal_clc_data)
+# add a column with same names
+sal_clc_data_melt$sample <- sapply(sal_clc_data_melt$variable, function(x){
+  if(grepl('wt_a',x)){
+    'wt_a'} 
+  else if(grepl('wt_b',x)){
+      'wt_b'} 
+  else if(grepl('wt_a',x)){
+      'pstB_a'}
+  else if(grepl('_a',x)){
+      'pstB_a'}
+  else if(grepl('_b',x)){
+      'pstB_b'}
+  })
+# add a column iwth mapping/alignemnt method
+sal_clc_data_melt$platform <- sapply(sal_clc_data_melt$variable, function(x){
+  if(grepl('clc',x)){
+    'CLC'}
+  else if(grepl('_1',x)){
+      'SALMON-unpaired'}
+  else if(grepl('_2',x)){
+      'SALMON_paired'}
+  })
+# add a column with salmon mapping parameter (paired or not)
+sal_clc_data_melt$paired <- sapply(sal_clc_data_melt$variable, function(x){
+  if(grepl('_2',x)){
+    'paired'
+    } else{
+      'unpaired'}
+  })
+# separate the data by method and parameter
+clc_melt <- melt(cbind('gene'=rownames(sal_clc_data),sal_clc_data[,1:4]), value.name = 'CLC')
+sal1_melt <- melt(cbind('gene'=rownames(sal_clc_data),sal_clc_data[,5:8]), value.name = 'SALMON-unpaired')
+sal2_melt <- melt(cbind('gene'=rownames(sal_clc_data),sal_clc_data[,9:12]), value.name = 'SALMON-paired')
+
+# recombine data so paired and unpaired are both matched to CLC values
+clc_data_agg <- cbind(clc_melt, 'SALMONunpaired'=sal1_melt[,3], 'SALMONpaired'=sal2_melt[,3])
+
+# plot in ggplot2 and include linear model fit stats
+my.formula <- y ~ x
+g <- ggplot(clc_data_agg[clc_data_agg$CLC > 0 & 
+                           clc_data_agg$SALMONunpaired > 0 & 
+                           clc_data_agg$SALMONpaired > 0,]) +
+  geom_point(aes(y=CLC, x=SALMONunpaired), color = '#C6A9B5') + #, shape=variable
+  geom_point(aes(y=CLC, x=SALMONpaired), color='#895881') + #, shape=variable
+  geom_text(x=3.75, hjust=0,y = 1.5, label = 'PAIRED', color='#C6A9B5', size=3.5) +
+  geom_text(x=3.75, hjust=0,y = 1.2, label = 'UNPAIRED', color='#895881', size=3.5) +
+  #geom_smooth(aes(y=clc_a, x=s_a_1),method=lm, se=F, fullrange=T, linetype=2, color='orange') +
+  #geom_smooth(aes(y=clc_a, x=s_a_2),method=lm, se=F, fullrange=T, linetype=2, color='grey') +
+  stat_poly_eq(aes(y=CLC, x=SALMONunpaired,label = paste(..eq.label.., sep = "~~~")), 
+               label.x.npc = "left", label.y.npc = 1,
+               eq.x.rhs = "~italic(x)", coef.digits = 2, color='#895881',
+               formula = my.formula, parse = TRUE, size = 3.5) +
+  stat_poly_eq(aes(y=CLC, x=SALMONunpaired,label = paste(..rr.label.., sep = "~~~")), 
+               label.x.npc = "left", label.y.npc = 0.95,coef.digits = 2,color='#895881',
+               formula = my.formula, parse = TRUE, size = 3.5) + 
+  
+  stat_poly_eq(aes(y=CLC, x=SALMONpaired,label = paste(..eq.label.., sep = "~~~")), 
+               label.x.npc = "left", label.y.npc = .85,
+               eq.x.rhs = "~italic(x)", coef.digits = 2, color='#C6A9B5',
+               formula = my.formula, parse = TRUE, size = 3.5) +
+  stat_poly_eq(aes(y=CLC, x=SALMONpaired,label = paste(..rr.label.., sep = "~~~")), 
+               label.x.npc = "left", label.y.npc = 0.8,coef.digits = 2, color='#C6A9B5',
+               formula = my.formula, parse = TRUE, size = 3.5) + 
+  xlab('SALMON log(TPM)') + ylab('CLC log(TPM)') +
+  scale_shape_discrete(guide='none') +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5) +
+  #facet_wrap(~variable)+
+  #theme_bw() +
+  #theme_pubr() +
+  ggsave('clc_vs_sal_paired_unpaired.png', height=3, width=3)
+g
+```
+
+
+Print out the lienar model fit stats as well in order to include in text or table.
+
+```{r}
+unpaired_fit <- summary(lm(clc_a ~ s_a_1, data = sal_clc_data))
+paired_fit <- summary(lm(clc_a ~ s_a_2, data = sal_clc_data))
+```
+
+### 1B Differential Expression
+
+In addition to compare the TPM values derived from different mapping methods, we performed differential expression (DE) analysis on the data derived from different methods using EdgeR. Here we can compare the results via fold-change values and fdr values determined for each gene.
+
+```{r}
+# load the results of DE analysis
+sal_clc_DE <- read.csv('../salmon_params/sal_clc_DEGs.csv', 
+                       stringsAsFactors = F)
+# use FDR < 0.05 as a cut-off for significance
+sal_clc_DE$sal_sig <- sapply(sal_clc_DE$SAL_FDR, function(x) x < 0.05)
+sal_clc_DE$clc_sig <- sapply(sal_clc_DE$CLC_FDR, function(x) x < 0.05)
+# load a list of PhoB-regulated genes for biological interpretation of teh DE analysis
+pho_reg <- read.csv('../salmon_params/H_pho_PAnum.csv', 
+                    stringsAsFactors = F, header=F)
+sum(pho_reg$V1 %in% sal_clc_DE$gene)
+```
+
+The Pho regulon has `r sum(pho_reg$V1 %in% sal_clc_DE$gene)` genes. 
+
+CLC-based methods produced `r sum(sal_clc_DE$sal_sig & abs(sal_clc_DE$SAL_logFC) > 1 )` DE genes, `r sum(sal_clc_DE$gene[sal_clc_DE$sal_sig & abs(sal_clc_DE$SAL_logFC) > 1] %in% pho_reg$V1)` of which are regulated by PhoB.
+
+Salmon-based methods produced `r sum(sal_clc_DE$clc_sig & abs(sal_clc_DE$CLC_logFC) > 1 )` DE genes, `r sum(sal_clc_DE$gene[sal_clc_DE$clc_sig & abs(sal_clc_DE$CLC_logFC) > 1] %in% pho_reg$V1)` of which are regulated by PhoB.
+
+
+```{r}
+
+# determine which PhoB-regulated genes are significantly, substantially DE
+clc_only <- sapply(setdiff(sal_clc_DE$gene[sal_clc_DE$sal_sig & 
+                                 (abs(sal_clc_DE$SAL_logFC) > 1) & 
+                                 sal_clc_DE$gene %in% pho_reg$V1],
+        sal_clc_DE$gene[sal_clc_DE$clc_sig & 
+                          (abs(sal_clc_DE$CLC_logFC) > 1) & 
+                          sal_clc_DE$gene %in% pho_reg$V1]), 
+       function(x) PAO1_to_name(x))
+
+sal_only <- sapply(setdiff(sal_clc_DE$gene[sal_clc_DE$clc_sig & 
+                                 (abs(sal_clc_DE$CLC_logFC) > 1) & 
+                                 sal_clc_DE$gene %in% pho_reg$V1],
+        sal_clc_DE$gene[sal_clc_DE$sal_sig & 
+                          (abs(sal_clc_DE$SAL_logFC) > 1) & 
+                          sal_clc_DE$gene %in% pho_reg$V1]
+        ), function(x) PAO1_to_name(x))
+
+clc_and_sal <- sapply(intersect(sal_clc_DE$gene[sal_clc_DE$clc_sig & 
+                                   (abs(sal_clc_DE$CLC_logFC) > 1) & 
+                                   sal_clc_DE$gene %in% pho_reg$V1],
+        sal_clc_DE$gene[sal_clc_DE$sal_sig & 
+                          (abs(sal_clc_DE$SAL_logFC) > 1) & 
+                          sal_clc_DE$gene %in% pho_reg$V1]
+        ), function(x) PAO1_to_name(x))
+
+
+```
+There were `r length(clc_and_sal)` genes captured by both methods: `r clc_and_sal`.
+
+There were `r length(clc_only)` genes captured only by CLC: `r clc_only`.
+
+and  `r length(sal_only)` genes captured only by salmon: `r sal_only`.
+
+
+### 1B Volcano Plot 
+
+We can visualize the overall results of DE analysis in a volcano plot where logFC and FDR cutoffs are marked with broken lines, the alignment/mapping method is displayed as the color of the points and whether or not they are regulated by PhoB is shown in the transparency of the points.
+
+```{r, warning=F}
+platform_text <- c('CLC','SALMON')
+g <- ggplot(sal_clc_DE) +
+  geom_point(aes(x=CLC_logFC, y = -log(CLC_FDR)), color = '#7FBF7B', alpha = 0.5) +
+  geom_point(aes(x=SAL_logFC, y = -log(SAL_FDR)), color='#C8CAED', alpha = 0.5) +
+  
+  geom_point(data = sal_clc_DE[sal_clc_DE$gene %in% pho_reg$V1 & 
+                                 (sal_clc_DE$CLC_logFC > 2 | 
+                                    sal_clc_DE$CLC_FDR < 0.05),], aes(x=CLC_logFC, y = -log(CLC_FDR)), color = '#1B7837', alpha = 0.75) +
+  geom_point(data = sal_clc_DE[sal_clc_DE$gene %in% pho_reg$V1& 
+                                 (sal_clc_DE$SAL_logFC > 2 | 
+                                    sal_clc_DE$SAL_FDR < 0.05),], aes(x=SAL_logFC, y = -log(SAL_FDR)), color='#542788', alpha = 0.75) +
+  
+  
+  geom_vline(xintercept = 2, color = "#EF8B46", lty=2) + 
+  geom_vline(xintercept = -2, color = "#EF8B46", lty=2) + 
+  geom_hline(yintercept =-log(0.05), color = "#EF8B46", lty=2) + 
+  xlab('logFC') + ylab('-log(FDR)') + 
+  geom_text(x=-5.5, y = 14, label = 'CLC', color='#89A45E', size=6) +
+  geom_text(x=-4.0, y = 12, label = 'SALMON', color='#895881', size=6) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5) +
+  #scale_color_manual(values = c('black','red'), labels = c('CLC','SALMON')) +
+  ggsave('clc_vs_sal_DE_volcano_pho_colored.png', height=3.4, width=3.4, units='in')
+g
+```
+
+
+
+
+### 1C logFC PLot
+
+We can also break-down this volcano plot to look at logFC only.
+
+```{r, warning=F}
+my.formula <- y ~ x
+
+sal_clc_DE$clc_mag <- sapply(sal_clc_DE$CLC_logFC, function(x) abs(x) > 2)
+sal_clc_DE$sal_mag <- sapply(sal_clc_DE$SAL_logFC, function(x) abs(x) > 2)
+
+sal_clc_DE$both_mag <- sal_clc_DE$sal_mag & sal_clc_DE$clc_mag
+sal_clc_DE$mag <- sapply(sal_clc_DE$both_mag, function(x) if(x){"BOTH"})
+sal_clc_DE$mag[(!sal_clc_DE$both_mag) & sal_clc_DE$sal_mag] <- 'SAL'
+sal_clc_DE$mag[(!sal_clc_DE$both_mag) & sal_clc_DE$clc_mag] <- 'CLC'
+sal_clc_DE$mag[(!sal_clc_DE$sal_mag) & (!sal_clc_DE$clc_mag)] <- 'NONE'
+sal_clc_DE$mag <- as.character(sal_clc_DE$mag)
+
+
+g <- ggplot(sal_clc_DE) +
+  geom_point(aes(y=CLC_logFC, x=SAL_logFC, color = mag)) +
+  geom_smooth(aes(y=CLC_logFC, x=SAL_logFC),method=lm, se=F, fullrange=T, 
+              linetype=2, color='#EF8B46') +
+  geom_abline(intercept=0, color = "black", lty=1) +
+  geom_segment(x = 2, xend=2, y=min(sal_clc_DE$CLC_logFC), yend=6.0, 
+               color = '#89A45E', lty=2) + 
+  geom_hline(yintercept=2, color = '#895881', lty=2) + 
+  geom_segment(x = -2, xend=-2, y=min(sal_clc_DE$CLC_logFC), yend=4.5, 
+               color = '#89A45E', lty=2) + 
+  geom_hline(yintercept=-2, color = '#895881', lty=2) + 
+  stat_poly_eq(aes(y=CLC_logFC, x=SAL_logFC,
+                   label = paste(..eq.label.., sep = "~~~"),), 
+               label.x.npc = "left", label.y.npc = 1,geom='text_npc',
+               eq.x.rhs = "~italic(x)", coef.digits = 2, color='#EF8B46',
+               formula = my.formula, parse = TRUE, size = 2) +
+  stat_poly_eq(aes(y=CLC_logFC, x=SAL_logFC,
+                   label = paste(..rr.label.., sep = "~~~"),), 
+    color='#EF8B46',geom='text_npc',
+               formula = my.formula, parse = TRUE, size = 2) + 
+  scale_color_manual(values=c("BOTH" = '#EF8B46', 'CLC' = '#89A45E', 
+                              'SAL' = '#895881', 'NONE' = 'grey'), guide=F) + 
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) +
+  #theme_pubr() +
+  ggsave('clc_vs_sal_logFC.png', height=1.7, width=1.7)
+g
+
+```
+
+
+### 1D FDR PLot
+
+We can also break-down this volcano plot to look at FDR only.
+
+```{r, warning=F}
+sal_clc_DE$sal_sig <- sapply(sal_clc_DE$SAL_FDR, function(x) x < 0.05)
+sal_clc_DE$clc_sig <- sapply(sal_clc_DE$CLC_FDR, function(x) x < 0.05)
+
+sal_clc_DE$both_sig <- sal_clc_DE$sal_sig & sal_clc_DE$clc_sig
+sal_clc_DE$sig <- sapply(sal_clc_DE$both_sig, function(x) if(x){"BOTH"})
+sal_clc_DE$sig[(!sal_clc_DE$both_sig) & sal_clc_DE$sal_sig] <- 'SAL'
+sal_clc_DE$sig[(!sal_clc_DE$both_sig) & sal_clc_DE$clc_sig] <- 'CLC'
+sal_clc_DE$sig[(!sal_clc_DE$sal_sig) & (!sal_clc_DE$clc_sig)] <- 'NONE'
+sal_clc_DE$sig <- as.character(sal_clc_DE$sig)
+
+g <- ggplot(sal_clc_DE) +
+  geom_point(aes(y=-log(CLC_FDR), x=-log(SAL_FDR), color = sig), size=0.5) +
+  geom_smooth(aes(y=-log(CLC_FDR), x=-log(SAL_FDR)),method=lm, se=F, 
+              fullrange=T, linetype=2, color='#EF8B46') +
+   geom_abline(intercept=0, color = "black", lty=1) +
+  stat_poly_eq(aes(y=-log(CLC_FDR), x=-log(SAL_FDR),
+                   label = paste(..eq.label.., sep = "~~~")), 
+               label.x.npc = "left", label.y.npc = 1,
+               eq.x.rhs = "~italic(x)", coef.digits = 2, color='#EF8B46',
+               formula = my.formula, parse = TRUE, size = 2) +
+  stat_poly_eq(aes(y=-log(CLC_FDR), x=-log(SAL_FDR),
+                   label = paste(..rr.label.., sep = "~~~")), color='#EF8B46',
+               formula = my.formula, parse = TRUE, size = 2) + 
+      geom_segment(x = -log(0.05), xend=-log(0.05), 
+                   y=min(-log(sal_clc_DE$CLC_FDR)), yend=12, color = '#89A45E', 
+                   lty=2) + 
+  geom_hline(yintercept=-log(0.05), color = '#895881', lty=2) + 
+  scale_color_manual(values=c("BOTH" = '#EF8B46', 'CLC' = '#89A45E', 
+                              'SAL' = '#895881', 'NONE' = 'grey'), guide=F) + 
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) +
+  #theme_pubr() +
+  ggsave('clc_vs_sal_FDR.png', height=1.7, width=1.7)
+g
+```
+
+
+
+
+
+
+
