@@ -8,9 +8,9 @@
 #       format_version: '1.5'
 #       jupytext_version: 1.9.1
 #   kernelspec:
-#     display_name: Python [conda env:core_acc]
+#     display_name: Python [conda env:make_compendia] *
 #     language: python
-#     name: conda-env-core_acc-py
+#     name: conda-env-make_compendia-py
 # ---
 
 # # Validate new compendia
@@ -181,8 +181,8 @@ fig1 = pn.ggplot(
 fig1 += pn.scale_color_manual(values=colors)
 fig1 += pn.geom_point(pn.aes(color="Strain type"), alpha=0.2)
 fig1 += pn.labs(
-    x="median expression of PAO1-only genes",
-    y="median expression of PA14-only genes",
+    x="median expression (PAO1-only)",
+    y="median expression (PA14-only)",
     title="Accessory gene expression in PAO1 compendium",
 )
 fig1 += pn.theme_bw()
@@ -190,11 +190,11 @@ fig1 += pn.theme(
     legend_title_align="center",
     plot_background=pn.element_rect(fill="white"),
     legend_key=pn.element_rect(fill="white", colour="white"),
-    legend_title=pn.element_text(family="sans-serif", size=12),
-    legend_text=pn.element_text(family="sans-serif", size=10),
-    plot_title=pn.element_text(family="sans-serif", size=14),
-    axis_text=pn.element_text(family="sans-serif", size=10),
-    axis_title=pn.element_text(family="sans-serif", size=12),
+    legend_title=pn.element_text(family="sans-serif", size=14),
+    legend_text=pn.element_text(family="sans-serif", size=12),
+    plot_title=pn.element_text(family="sans-serif", size=16),
+    axis_text=pn.element_text(family="sans-serif", size=12),
+    axis_title=pn.element_text(family="sans-serif", size=14),
 )
 fig1 += pn.guides(colour=pn.guide_legend(override_aes={"alpha": 1}))
 
@@ -211,8 +211,8 @@ fig2 = pn.ggplot(
 fig2 += pn.scale_color_manual(values=colors)
 fig2 += pn.geom_point(pn.aes(color="Strain type"), alpha=0.4)
 fig2 += pn.labs(
-    x="median expression of PAO1-only genes",
-    y="median expression of PA14-only genes",
+    x="median expression (PAO1-only)",
+    y="median expression (PA14-only)",
     title="Accessory gene expression in PA14 compendium",
 )
 fig2 += pn.theme_bw()
@@ -220,11 +220,11 @@ fig2 += pn.theme(
     legend_title_align="center",
     plot_background=pn.element_rect(fill="white"),
     legend_key=pn.element_rect(fill="white", colour="white"),
-    legend_title=pn.element_text(family="sans-serif", size=12),
-    legend_text=pn.element_text(family="sans-serif", size=10),
-    plot_title=pn.element_text(family="sans-serif", size=14),
-    axis_text=pn.element_text(family="sans-serif", size=10),
-    axis_title=pn.element_text(family="sans-serif", size=12),
+    legend_title=pn.element_text(family="sans-serif", size=14),
+    legend_text=pn.element_text(family="sans-serif", size=12),
+    plot_title=pn.element_text(family="sans-serif", size=16),
+    axis_text=pn.element_text(family="sans-serif", size=12),
+    axis_title=pn.element_text(family="sans-serif", size=14),
 )
 fig2 += pn.guides(colour=pn.guide_legend(override_aes={"alpha": 1}))
 
