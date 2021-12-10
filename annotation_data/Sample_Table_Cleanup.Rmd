@@ -1,0 +1,65 @@
+---
+title: "Sample Data Cleanup"
+output: html_notebook
+---
+
+Purpose: The goal here is to make some simple adjustments to the large sample table (where each row of the table has an individual sample ID). Certain strains, for example, will be renamed as "clinical isolates" where appropriate. Certain media will be recategorized along simiar lines. 
+
+# Table editing with grep()
+
+First, load in data table (# rows = # samples)
+```{r}
+SampleDT <- read.csv("./Data_Inputs/SampleDataVF.csv")
+View(SampleDT)
+```
+
+Next, select out different strain types and re-assign values:
+```{r}
+head(SampleDT$Strain)
+
+grep("PAO1", SampleDT$Strain)
+
+SampleDT$Strain[grep("PAO1", SampleDT$Strain)] <- "PAO1" #Perfect
+SampleDT$Strain[grep("PA14", SampleDT$Strain)] <- "PA14"
+SampleDT$Strain[grep("PAK", SampleDT$Strain)] <- "PAK"
+SampleDT$Strain[grep("CMC", SampleDT$Strain)] <- "Clinical Isolates"
+SampleDT$Strain[grep("AES-1R", SampleDT$Strain)] <- "Clinical Isolates"
+SampleDT$Strain[grep("LESB58", SampleDT$Strain)] <- "Clinical Isolates"
+SampleDT$Strain[grep("AG1", SampleDT$Strain)] <- "Clinical Isolates"
+SampleDT$Strain[grep("PA3", SampleDT$Strain)] <- "Clinical Isolates"
+
+
+```
+
+Do the same for media:
+```{r}
+head(SampleDT$Medium)
+
+SampleDT$Medium[grep("M9", SampleDT$Medium)] <- "M9 Medium"
+SampleDT$Medium[grep("Lysogeny Broth", SampleDT$Medium)] <- "LB"
+SampleDT$Medium[grep("Lennox Broth", SampleDT$Medium)] <- "LB"
+SampleDT$Medium[grep("L-Broth", SampleDT$Medium)] <- "LB"
+SampleDT$Medium[grep("Luria Broth", SampleDT$Medium)] <- "LB"
+SampleDT$Medium[grep("LB", SampleDT$Medium)] <- "LB"
+SampleDT$Medium[grep("SCFM", SampleDT$Medium)] <- "Synthetic Cystic Fibrosis Medium"
+SampleDT$Medium[grep("Synthetic Cystic Fibrosis", SampleDT$Medium)] <- "Synthetic Cystic Fibrosis Medium"
+SampleDT$Medium[grep("ASM", SampleDT$Medium)] <- "Synthetic Cystic Fibrosis Medium"
+SampleDT$Medium[grep("Artificial Sputum Medium", SampleDT$Medium)] <- "Synthetic Cystic Fibrosis Medium"
+SampleDT$Medium[grep("MMP", SampleDT$Medium)] <- "MMP Medium"
+SampleDT$Medium[grep("Mueller-Hinton", SampleDT$Medium)] <- "Mueller-Hinton Broth"
+SampleDT$Medium[grep("Mueller Hinton", SampleDT$Medium)] <- "Mueller-Hinton Broth"
+SampleDT$Medium[grep("TSB", SampleDT$Medium)] <- "Tryptic Soy Broth"
+SampleDT$Medium[grep("Tryptic Soy Broth", SampleDT$Medium)] <- "Tryptic Soy Broth"
+SampleDT$Medium[grep("BM2", SampleDT$Medium)] <- "BM2 Medium"
+
+
+
+```
+
+Now export the table
+```{r}
+View(head(SampleDT))
+
+write.csv(SampleDT, "SampleDataVFF.csv")
+```
+
