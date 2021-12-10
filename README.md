@@ -8,7 +8,7 @@ a pre-downloaded SRA run table and pre-determined salmon parameters.
 
 Before using the PBS script, the headers will need to be altered to run through a specific user
 account on Dartmouth's disocvery cluster and/or dirs in bash scripts will need to be
-restructured. 
+restructured.
 
 ## Installation
 
@@ -43,6 +43,11 @@ Iterate between the following scripts until all samples have sucessfully run
 
 /collect_jobIDs.pbs
 /collected_IDs_jobs.pbs
+
+Check that all samples have been processed
+find comp/ -mexdepth 2 -mindepth 2 | cat | wc -l
+find /dartfs-hpc/scratch/f002bx6/salmon/pa14_cdna/comp -name "*.sf" | wc -l
+
 
 5. Collect salmon output and log data
 
