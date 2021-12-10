@@ -184,17 +184,34 @@ non_pao1_sra = pao1_pa14_acc_expression.loc[
     pao1_pa14_acc_expression["Strain type_pao1"] != "PAO1",
     "median_acc_expression_pao1",
 ]
+
+# Format data for plotting
+pao1_acc_expression = pao1_pa14_acc_expression.copy()
+pao1_acc_expression.loc[pao1_sra.index, "label"] = "PAO1"
+pao1_acc_expression.loc[non_pao1_sra.index, "label"] = "not PAO1"
 # -
 
 pao1_threshold = 25
 
-f = sns.distplot(pao1_sra, color="#C6A9B5", kde=False)
-f = sns.distplot(non_pao1_sra, color="grey", kde=False)
-plt.axvline(pao1_threshold, 0, 100, color="red")
+f = sns.displot(
+    data=pao1_acc_expression,
+    x="median_acc_expression_pao1",
+    hue="label",
+    palette={
+        "not PAO1": "grey",
+        "PAO1": "#C6A9B5"
+    },
+    aspect=1.5,
+    edgecolor=None,
+    legend=False
+           )
+plt.axvline(pao1_threshold,0,100, color="red")
 plt.title("PAO1 median accessory expression", family="sans-serif", size=16)
-plt.xlabel("median accessory expression", family="sans-serif", size=12)
-plt.ylabel("count", family="sans-serif", size=12)
-f.figure.savefig("pao1_threshold_dist.svg", format="svg", dpi=300)
+plt.xlabel("median accessory expression", family="sans-serif", size=14)
+plt.ylabel("count", family="sans-serif", size=14)
+plt.xticks(fontsize=12)
+plt.yticks(fontsize=12)
+f.savefig("pao1_threshold_dist.svg", format="svg", dpi=300)
 
 # +
 # Get PA14 samples that are labeled PA14 and non-PA14
@@ -207,17 +224,34 @@ non_pa14_sra = pao1_pa14_acc_expression.loc[
     pao1_pa14_acc_expression["Strain type_pa14"] != "PA14",
     "median_acc_expression_pa14",
 ]
+
+# Format data for plotting
+pa14_acc_expression = pao1_pa14_acc_expression.copy()
+pa14_acc_expression.loc[pa14_sra.index, "label"] = "PA14"
+pa14_acc_expression.loc[non_pa14_sra.index, "label"] = "not PA14"
 # -
 
 pa14_threshold = 25
 
-g = sns.distplot(pa14_sra, color="#895881", kde=False)
-g = sns.distplot(non_pa14_sra, color="grey", kde=False)
-plt.axvline(pa14_threshold, 0, 100, color="red")
+g = sns.displot(
+    data=pa14_acc_expression,
+    x="median_acc_expression_pa14",
+    hue="label",
+    palette={
+        "not PA14": "grey",
+        "PA14": "#C6A9B5"
+    },
+    aspect=1.5,
+    edgecolor=None,
+    legend=False
+           )
+plt.axvline(pa14_threshold,0,100, color="red")
 plt.title("PA14 median accessory expression", family="sans-serif", size=16)
-plt.xlabel("median accessory expression", family="sans-serif", size=12)
-plt.ylabel("count", family="sans-serif", size=12)
-g.figure.savefig("pa14_threshold_dist.svg", format="svg", dpi=300)
+plt.xlabel("median accessory expression", family="sans-serif", size=14)
+plt.ylabel("count", family="sans-serif", size=14)
+plt.xticks(fontsize=12)
+plt.yticks(fontsize=12)
+g.savefig("pa14_threshold_dist.svg", format="svg", dpi=300)
 
 # **Takeaway:**
 # Looks like using a threshold of 25 TPM separates between SRA-annotated PAO1 samples vs non-PAO1 samples. Similarly for PA14. This is the threshold we'll use to bin samples into PAO1 vs PA14 compendia.
