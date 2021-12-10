@@ -1,0 +1,285 @@
+---
+title: "Figure Generation"
+output: html_notebook
+---
+
+Purpose: The goal here is to take the study annotation data gathered from GEO using GEOQuery (in the "Annotation Data Collection" file) and use it to generate various figures to include in the associated paper. In addition to generating figures, an additional table will be produced that maps gene function / KEGG pathway info to studies in which genes are perturbed, using data gathered from the database KEGGREST.
+
+# Setup
+
+Install necessary packages:
+```{r}
+#install.packages("ggplot2")
+library(ggplot2)
+
+#install.packages("tidyr")
+library(tidyr)
+
+#install.packages("ggwordcloud")
+library(ggwordcloud)
+
+#BiocManager::install("KEGGREST")
+library(KEGGREST)
+
+#install.packages("ggprism")
+library(ggprism)
+
+#install.packages("RColorBrewer")
+library(RColorBrewer)
+
+```
+
+
+# Generating and Exporting Figures
+
+First of all, load in the cleaned up table of annotations: 
+```{r}
+AnnotationData <- read.csv("StudyDataVF.csv")
+```
+
+First Figure: Simple bar plot of Pseudomonas aeruginosa strains used in studies:
+```{r}
+Strains <- AnnotationData[,c(2,3,19)]
+Strains <- Strains[!duplicated(Strains[ , c("SRA_ID")]), ]
+Strains <- separate_rows(Strains, GSM_Accession, sep = ",", convert = TRUE)
+
+#ID'ing clinical isolate strains (as opposed to lab reference strains like PAO1, PA14, and PAK)
+Strains[which(Strains$Strain == "AES-1R"),]$Strain <- "Clinical Isolates"
+Strains[which(Strains$Strain == "CMC-097 / 115"),]$Strain <- "Clinical Isolates"
+Strains[which(Strains$Strain == "LESB58"),]$Strain <- "Clinical Isolates"
+Strains[which(Strains$Strain == "AG1"),]$Strain <- "Clinical Isolates"
+Strains[which(Strains$Strain == "PA3"),]$Strain <- "Clinical Isolates"
+Strains[which(Strains$Strain == "Clinical Isolates"),]$Strain <- "Clinical Isolates"
+
+UniqueStrains <- table(Strains$Strain) 
+UniqueStrains <- as.data.frame(UniqueStrains)
+BarStrains <- UniqueStrains[UniqueStrains$Freq >= 1,]
+BarStrains <- BarStrains[BarStrains$Var1 != "Other Species",]
+BarStrains$Var1 <- factor(BarStrains$Var1,levels = BarStrains$Var1[order(BarStrains$Freq, decreasing  = TRUE)]) 
+names(BarStrains) <- c("Strains", "Freq")
+
+#log-transformed plot
+ggplot(BarStrains, aes(x = Var1, y = Freq, fill = Var1)) + geom_bar(stat = "identity") + scale_y_continuous(trans='log10') + coord_flip() +  xlab("Strain") + ylab("# of Samples") + theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) +   theme(axis.text=element_text(size=12), axis.title=element_text(size=15,face="plain")) + scale_fill_manual(values = c("PAK" = "#EF8B46",
+                               "PA14" = "#895881",
+                               "Clinical Isolates" = "#89A45E",
+                               "PAO1" = "#C6A9B5"))
+ggsave("StrainsPlotlog10.png") 
+
+#non-transformed plot
+
+ggplot(BarStrains, aes(x = Strains, y = Freq, fill = Strains)) + geom_bar(stat = "identity") + coord_flip() +  xlab("Strain") + ylab("# of Samples") + theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) + theme(axis.text=element_text(size=14), legend.text=element_text(size=15), legend.title = element_text(size = 16, hjust = 0), axis.title=element_text(size=16,face="plain")) + scale_fill_manual(values = c("PAK" = "#EF8B46",
+                               "PA14" = "#895881",
+                               "Clinical Isolates" = "#89A45E",
+                               "PAO1" = "#C6A9B5"))
+ggsave("StrainsPlotNT.png")
+
+#For purpose of citing in paper, look at number of studies that use each different strain
+StrainStudies <- AnnotationData[,c(2,3,19)]
+StrainStudies <- StrainStudies[!duplicated(StrainStudies[ , c("SRA_ID")]), ]
+UniqueStrainStudies <- table(StrainStudies$Strain) 
+UniqueStrainStudies <- as.data.frame(UniqueStrainStudies)
+
+
+```
+
+Second Figure: Simple bar plot of media used in studies:
+```{r}
+Media <- AnnotationData[,c(2,7)]
+Media <- Media[!duplicated(Media[ , c("SRA_ID")]), ]
+UniqueMedia <- table(Media$Medium) 
+UniqueMedia <- as.data.frame(UniqueMedia, stringsAsFactors = FALSE)
+BarMedia <- UniqueMedia[UniqueMedia$Freq >= 1,]
+BarMedia <- BarMedia[BarMedia$Var1 != "Other",]
+BarMedia$Var1[6] <- "SCFM"
+BarMedia$Var1 <- factor(BarMedia$Var1,levels = BarMedia$Var1[order(BarMedia$Freq, decreasing  = TRUE)]) 
+
+Media <- AnnotationData[,c(2,7,19)]
+Media <- Media[!duplicated(Media[ , c("SRA_ID")]), ]
+Media <- separate_rows(Media, GSM_Accession, sep = ",", convert = TRUE)
+UniqueMedia <- table(Media$Medium) 
+UniqueMedia <- as.data.frame(UniqueMedia, stringsAsFactors = FALSE)
+BarMedia <- UniqueMedia[UniqueMedia$Freq >= 1,]
+#BarMedia <- BarMedia[BarMedia$Var1 != c("Other"),]
+BarMedia$Var1[7] <- "SCFM"
+BarMedia$Var1 <- factor(BarMedia$Var1,levels = BarMedia$Var1[order(BarMedia$Freq, decreasing  = TRUE)]) 
+names(BarMedia) <- c("Media", "Freq")
+
+myColors <- brewer.pal(n = 8,"Dark2")
+names(myColors) <- levels(BarMedia$Var1)
+
+ggplot(BarMedia, aes(x = Media, y = Freq, fill = Media)) + geom_bar(stat = "identity") + scale_y_continuous(trans='log10') + coord_flip() + xlab("Media") + ylab("# of Samples") + theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) + theme(axis.text=element_text(size=15), axis.title=element_text(size=16,face="plain"), legend.text=element_text(size=14), legend.title = element_text(size = 16, hjust = 0)) + scale_fill_manual(name = "Media",values = myColors)
+ggsave("MediaPlot.png")
+
+MediaStudies <- AnnotationData[,c(2,7)]
+MediaStudies <- MediaStudies[!duplicated(MediaStudies[ , c("SRA_ID")]), ]
+UniqueMediaStudies <- table(MediaStudies$Medium) 
+UniqueMediaStudies <- as.data.frame(UniqueMediaStudies)
+
+```
+
+Third Figure: Stacked bar plot (%) - breakdown of media used for each Pseudomonas strain:
+```{r}
+MS <- AnnotationData[,c(2,3,7)]
+MS <- MS[!duplicated(MS[ , c("SRA_ID")]), ]
+Freq <- table(MS) 
+Freq <- as.data.frame(Freq, stringsAsFactors = FALSE)
+MSClean <- MS[which(MS$Strain == "PAO1" | MS$Strain == "UCBPP-PA14" | MS$Strain == "PA14" | MS$Strain == "Clinical Isolates"),]
+
+ggplot(MSClean, aes(fill = MSClean$Medium, x = MSClean$Strain)) + 
+  geom_bar(position="fill", stat="count", width = 0.6) + theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) +  theme(axis.text=element_text(size=15), axis.title=element_text(size=16,face="plain"), legend.text=element_text(size=14), legend.title = element_text(size = 16, hjust = 0))  + xlab("Strain") + ylab("Percent of Studies") + labs(fill = "Medium") + scale_fill_manual(name = "Media",values = myColors)
+ggsave("PercentSMPlot.png")
+
+```
+
+
+Fourth Figure: PA Genes Studied - breakdown of implicated pathways:
+```{r}
+#Get list of genes studied (specifically, genes identified with basic PA ideas, like PA0001)
+#PAGenes <- read.csv("Tables/Table3.csv") 
+#When updating, change to just 'GEOGenes' to recreate figure - or use all genes (ask Georgia to decide)
+PAGenes <- PAGenes$PA.Gene.ID
+PAGenes <- unlist(strsplit(PAGenes,","))
+PAGenes <- na.omit(PAGenes)
+PAGenes <- gsub(" ", "", PAGenes) 
+
+#Now load in pathway info for all the genes
+Pathways <- c()
+for (i in 1:length(PAGenes)) {
+  tryCatch({
+    Gene <- PAGenes[i]
+    Gene <- paste("pae:", Gene, sep = "")
+    query <- keggGet(Gene)
+    for (j in 1:length(query[[1]]$PATHWAY)) {
+      if (is.null(query[[1]]$PATHWAY[[j]]) != TRUE) {
+      Pathways <- c(Pathways, query[[1]]$PATHWAY[[j]])
+      } else {
+      Pathways <- c(Pathways,"NA")
+      }
+    }
+  }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+}
+
+#Don't worry about error messages - they are just telling you that one of the genes is not associated with any pseudomonas KEGG pathways yet.
+
+#Produce bar graph of pathways 
+UniquePathways <- table(Pathways) 
+UniquePathways <- as.data.frame(UniquePathways, stringsAsFactors = FALSE)
+UniquePathways <- UniquePathways[-10,]
+BarPaths <- UniquePathways[UniquePathways$Freq >= 1,]
+BarPaths$Pathways[5] <- "Biofilm formation"
+BarPaths$Pathways[6] <- "Biosynthesis - secondary metabolites"
+BarPaths$Pathways[7] <- "CAMP resistance"
+
+ggplot(BarPaths, aes(x = reorder(Pathways, -Freq), y = Freq)) + geom_bar(stat = "identity", fill = "#895881") + 
+  coord_flip() + theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) +  theme(axis.text=element_text(size=15), axis.title=element_text(size=16,face="plain")) + xlab("KEGG Pathway") + ylab("Study Count") + theme(legend.position = "none") 
+ggsave("PathwaysPlot.png")
+
+```
+
+Fifth Figure: PA Gene Studied - breakdown of gene functions:
+```{r}
+
+#Load in gene function info for all the genes
+Functions <- c()
+for (i in 1:length(PAGenes)) {
+  tryCatch({
+    Gene <- PAGenes[i]
+    Gene <- paste("pae:", Gene, sep = "")
+    query <- keggGet(Gene)
+    if (is.null(query[[1]]$NAME[1]) != TRUE) {
+      Functions[i] <- query[[1]]$NAME[1]
+    } else {
+    Functions[i] <- "NA"
+    }
+  }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+}
+
+#Again, don't worry about error messages here - some of the genes just don't have functions associated with them and the for loop is designed to let you know that is the case.
+
+#All functions pulled out by the loop above where exported to a csv and edited to be made simpler and improve the final graph output (for example, converted '(RefSeq) type 4 fimbrial protein PilA' to 'type 4 fimbrial protein'). Then they were imported back in as 'BarFuncs2'
+
+BarFuncs3 <- read.csv("./Data_Inputs/BarFuncs3.csv")
+BarFuncs3 <- BarFuncs3[,3]
+BarFuncs3 <- BarFuncs3[BarFuncs3 != "Hypothetical Protein "]
+BarFuncs3 <- BarFuncs3[BarFuncs3 != "NA"]
+
+
+UniqueFunctions <- table(BarFuncs3) 
+UniqueFunctions <- as.data.frame(UniqueFunctions)
+BarFunctions <- UniqueFunctions[UniqueFunctions$Freq >= 1,]
+
+#Produce bar graph of gene functions
+ggplot(BarFunctions, aes(x = reorder(BarFuncs3, -Freq), y = Freq)) + geom_bar(stat = "identity", fill = "#1B9E77") + 
+  coord_flip() + theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) +  theme(axis.text=element_text(size=15), axis.title=element_text(size=16,face="plain")) + xlab("Gene Function") + ylab("Study Count") + theme(legend.position = "none")
+ggsave("FunctionsPlot.png")
+
+```
+
+Supplemental Figure: Word cloud of treatments used in studies:
+```{r}
+Treatments <- AnnotationData[,c(2,8)]
+Treatments <- Treatments[!duplicated(Treatments[ , c("SRA_ID")]), ]
+
+Treatments <- na.omit(Treatments)
+Treatments <- separate_rows(Treatments, Treatment, sep = ",", convert = TRUE)
+
+UniqueTreatments <- table(Treatments$Treatment) 
+UniqueTreatments <- as.data.frame(UniqueTreatments)
+UniqueTreatments$Var1 <- as.character(UniqueTreatments$Var1)
+#separate_rows(GEODF, GEODF$Strain, sep = ",")
+BarTreatments <- UniqueTreatments[UniqueTreatments$Freq >= 1,]
+BarTreatments <- BarTreatments[c(-2,-20),]
+
+#BarTreatments$Var1 <- factor(BarTreatments$Var1,levels = BarTreatments$Var1[order(BarTreatments$Freq, decreasing  = TRUE)]) 
+
+#ggplot(BarTreatments, aes(x = Var1, y = Freq, fill = as.factor(Freq))) + geom_bar(stat = "identity") + 
+  #coord_flip() + scale_fill_brewer(palette = "Blues") + theme_minimal() + xlab("Media") + ylab("Study Count") + theme(legend.title=element_blank())
+
+#Or alternatively in this case - a word cloud
+set.seed(42)
+mid <- mean(BarTreatments$Freq)
+
+ggplot(BarTreatments, aes(label = Var1, size = Freq, color = Freq)) +
+  geom_text_wordcloud() +
+  scale_size_area(max_size = 10) + 
+  theme_prism(base_fontface = 'plain', base_line_size = 0, base_size = 8) +  theme(axis.text=element_text(size=12), axis.title=element_text(size=15,face="plain"))
+
+ggsave("TreatmentsPlot.png")
+
+```
+
+Gene Table Output: Create columns linking PA gene IDs and gene pathways / functions to display in a lookup table
+```{r}
+
+GeneInfo <- data.frame(
+                 GeneID=character(), 
+                 Pathway=character(), 
+                 Function=character(),
+                 stringsAsFactors=FALSE) 
+
+for (i in 1:length(PAGenes)) {
+  tryCatch({
+    Gene <- PAGenes[i]
+    Gene <- paste("pae:", Gene, sep = "")
+    query <- keggGet(Gene)
+    for (j in 1:length(query[[1]]$PATHWAY)) {
+      if (is.null(query[[1]]$PATHWAY[[j]]) != TRUE) {
+      Path <- query[[1]]$PATHWAY[[j]]
+      Fun <- query[[1]]$NAME[1]
+      ID <- PAGenes[i]
+      } else {
+      Path <- "NA"
+      Fun <- query[[1]]$NAME[1]
+      ID <- PAGenes[i]
+      }
+      GeneInfo[nrow(GeneInfo)+1,] = c(ID, Path, Fun)
+    }
+  
+  }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+}
+
+#Now get rid of duplicate rows
+GeneInfo <- unique(GeneInfo)
+write.csv(GeneInfo, "Gene_Pathway_Function_Lookup.csv")
+```
+
