@@ -1,0 +1,194 @@
+---
+title: "Annotation Data Collection (Clean)"
+output: html_notebook
+---
+
+# Setup
+
+Install necessary packages:
+```{r}
+#install.packages("rentrez")
+library(rentrez)
+
+#BiocManager::install("GEOquery")
+library(GEOquery)
+
+#install.packages("stringr")
+library(stringr)
+
+#install.packages("tidyr")
+library(tidyr)
+```
+
+# Data Scraping (GEOQuery)
+
+First, gather IDs of Pseudomonas aeruginosa RNA sequencing studies in GEO. Use the summary table that can be exported from GEO after searching for studies of interest:
+```{r}
+#First, load in the summary table and extract GSE IDs for all studies of interest
+PA_Summaries <- read.delim("PA_Summaries.txt", header = FALSE, sep = "\t", dec = ".")
+PA_Subset <- PA_Summaries[grep("GSE", PA_Summaries$V1), ]
+PA_Subset <- PA_Subset$V1
+PA_Subset <- str_extract_all(string = PA_Subset, pattern = "GSE[0-9]+")
+
+PAIDs <- rep("NA", 116)
+for (i in 1:length(PA_Subset)) {
+  PAIDs[i] <- PA_Subset[[i]][2]
+}
+
+PAIDsT <- PAIDs[-98] #Drop study 98 - checked below and it won't work with GEOQuery 
+#(GSE55158 - https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE55158)
+
+#-----
+#Now, create a list object housing information on all the studies of interest
+PAStudies <- vector(mode = "list", length = length(PAIDsT))
+
+Sys.setenv("VROOM_CONNECTION_SIZE" = 131072 * 20)
+#Need to do this for the following line to run 
+
+for (i in 1:length(PAStudies)) {
+  PAStudies[[i]] <- getGEO(PAIDsT[i])
+}
+
+PAData <- unlist(PAStudies)
+
+
+```
+
+Now, want to name the PAData object by bioproject ID's
+```{r}
+BPIDs <- c(rep("NA",215))
+
+for (i in 1:length(PAData)) {
+  print(PAData[[i]]@experimentData@other$relation)
+}
+
+for (i in 1:length(PAData)) {
+    if (is.null(PAData[[i]]@experimentData@other$relation) != TRUE) {
+      BPIDs[i] <- PAData[[i]]@experimentData@other$relation
+    } else {
+      BPIDs[i] <- "No Bioproject ID"
+    }
+}
+
+BPIDs2 <- str_extract_all(string = BPIDs, pattern = "PRJ[A-Z]+[0-9]+")
+
+length(PAData) == length(BPIDs2) #Just checking - good
+names(PAData) <- BPIDs2
+
+#Remove items from the list that have no BioProject ID
+PADataClean <- PAData[c(-6,-7,-130,-146,-147)]
+
+
+```
+
+
+# Re-Formatting the Data
+
+The goal now is to take certain metadata from the list object just created and store it in a simple data-frame structure.
+
+First step is to create an empty data frame with all the annotations of interest labeled as column names:
+```{r}
+GEODF <- data.frame(Identifier=character(), 
+                 stringsAsFactors=FALSE) 
+
+GEODF[1:length(PADataClean),] <- "NA"
+
+nrow(GEODF) == length(PADataClean) #Good
+
+#How many columns do we need - from the # of column names below, it's 37
+
+#First add empty columns 
+
+GEODF$X2 <- "NA"
+GEODF$X3 <- "NA"
+GEODF$X4 <- "NA"
+GEODF$X5 <- "NA"
+GEODF$X6 <- "NA"
+GEODF$X7 <- "NA"
+GEODF$X8 <- "NA"
+GEODF$X9 <- "NA"
+GEODF$X10 <- "NA"
+GEODF$X11 <- "NA"
+GEODF$X12 <- "NA"
+GEODF$X13 <- "NA"
+GEODF$X14 <- "NA"
+GEODF$X15 <- "NA"
+GEODF$X16 <- "NA"
+GEODF$X17 <- "NA"
+GEODF$X18 <- "NA"
+GEODF$X19 <- "NA"
+GEODF$X20 <- "NA"
+GEODF$X21 <- "NA"
+GEODF$X22 <- "NA"
+GEODF$X23 <- "NA"
+GEODF$X24 <- "NA"
+GEODF$X25 <- "NA"
+GEODF$X26 <- "NA"
+GEODF$X27 <- "NA"
+GEODF$X28 <- "NA"
+GEODF$X29 <- "NA"
+GEODF$X30 <- "NA"
+GEODF$X31 <- "NA"
+GEODF$X32 <- "NA"
+GEODF$X33 <- "NA"
+GEODF$X34 <- "NA"
+GEODF$X35 <- "NA"
+GEODF$X36 <- "NA"
+
+#Now name them 
+
+colnames(GEODF) <- c("BioProject_ID","SRA_ID","Strain","Genotype","Abx_Marker","Variant_Phenotype","Medium","Treatment","Biotic_Lvl1","Biotic_Lvl2","GrowthSetting_1","GrowthSetting_2","Nucleic_Acid","Temperature","OD","Additional_Notes","Description","Publication","Status","Platform_ID","Biosample_ID","GEO_Accession","SRA_Accession","Instrument","LibrarySelection","Group1","Group2","Group3","Location1","Location2","Location3","Location4","Location5","Date1","Date2","Date3")
+```
+
+Next, fill up the empty data frame with the appropriate annotations from the list object:
+```{r}
+for (i in 1:nrow(GEODF)) {
+  GEODF$BioProject_ID[i] = PADataClean[[i]]@experimentData@other$relation  
+  GEODF$SRA_ID[i] = PADataClean[[i]]@experimentData@other$relation  
+  GEODF$Strain[i] = toString(PADataClean[[i]]@phenoData@data$characteristics_ch1)
+  GEODF$Genotype[i] = toString(PADataClean[[i]]@phenoData@data$characteristics_ch1.1)
+  GEODF$Abx_Marker[i] = toString(PADataClean[[i]]@phenoData@data$characteristics_ch1.2)
+  GEODF$Variant_Phenotype[i] = toString(PADataClean[[i]]@phenoData@data$characteristics_ch1.1)
+  GEODF$Medium[i] = toString(PADataClean[[i]]@phenoData@data$growth_protocol_ch1)
+  GEODF$Treatment[i] = toString(PADataClean[[i]]@phenoData@data$characteristics_ch1.1)
+  GEODF$Biotic_Lvl1[i] = toString(PADataClean[[i]]@phenoData@data$source_name_ch1)
+  GEODF$Biotic_Lvl2[i] = toString(PADataClean[[i]]@phenoData@data$organism_ch1)
+  GEODF$GrowthSetting_1[i] = toString(PADataClean[[i]]@phenoData@data$characteristics_ch1.1)
+  GEODF$GrowthSetting_2[i] = toString(PADataClean[[i]]@phenoData@data$growth_protocol_ch1)
+  GEODF$Nucleic_Acid[i] = toString(PADataClean[[i]]@phenoData@data$molecule_ch1)
+  GEODF$Temperature[i] = toString(PADataClean[[i]]@phenoData@data$growth_protocol_ch1)
+  GEODF$OD[i] = toString(PADataClean[[i]]@phenoData@data$treatment_protocol_ch1)
+  GEODF$Additional_Notes[i] = PADataClean[[i]]@experimentData@other$overall_design
+  GEODF$Description[i] = toString(PADataClean[[i]]@phenoData@data$characteristics_ch1)
+  GEODF$Publication[i] = PADataClean[[i]]@experimentData@url
+  GEODF$Status[i] = toString(PADataClean[[i]]@phenoData@data$status)
+  GEODF$Platform_ID[i] = toString(PADataClean[[i]]@phenoData@data$platform_id)
+  GEODF$Biosample_ID[i] = toString(PADataClean[[i]]@phenoData@data$relation)
+  GEODF$GEO_Accession[i] = toString(PADataClean[[i]]@phenoData@data$geo_accession)
+  GEODF$SRA_Accession[i] = toString(PADataClean[[i]]@phenoData@data$relation.1)
+  GEODF$Instrument[i] = toString(PADataClean[[i]]@phenoData@data$instrument_model)
+  GEODF$LibrarySelection[i] = toString(PADataClean[[i]]@phenoData@data$library_selection)
+  GEODF$Group1[i] = toString(PADataClean[[i]]@phenoData@data$contact_institute)
+  GEODF$Group2[i] = toString(PADataClean[[i]]@phenoData@data$contact_name)
+  GEODF$Group3[i] = toString(PADataClean[[i]]@phenoData@data$contact_email)
+  GEODF$Location1[i] = toString(PADataClean[[i]]@phenoData@data$contact_address)
+  GEODF$Location2[i] = toString(PADataClean[[i]]@phenoData@data$contact_city)
+  GEODF$Location3[i] = toString(PADataClean[[i]]@phenoData@data$contact_state)
+  GEODF$Location4[i] = toString(PADataClean[[i]]@phenoData@data$`contact_zip/postal_code`)
+  GEODF$Location5[i] = toString(PADataClean[[i]]@phenoData@data$contact_country)
+  GEODF$Date1[i] = toString(PADataClean[[i]]@phenoData@data$submission_date)
+  GEODF$Date2[i] = toString(PADataClean[[i]]@phenoData@data$status)
+  GEODF$Date3[i] = toString(PADataClean[[i]]@phenoData@data$last_update_date)
+}
+```
+
+# Exporting the Data
+
+Export the study data as a CSV file:
+```{r}
+write.csv(GEODF, "StudyData.csv", row.names = FALSE)
+```
+
+Ultimately, the data in this spreadsheet was edited so that each cell has only the appropriate values (i.e., removed duplicate values separated by columns). The edited spreadsheet is present in the supplementary files for the publication associated with this work.  
+
+
