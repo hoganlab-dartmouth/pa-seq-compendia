@@ -1,0 +1,1702 @@
+---
+title: "Pa Compendia Quality Control: visualization"
+output: html_notebook
+author: Georgia Doing
+date: Sept 23, 2021
+---
+#### Background
+
+In the genesis of this compendium of RNAseq data, a wide net was cast on the NCBI SRA database in order to maximize the number of publicly available P. aeruginosa RNAseq datasets collected. For details on the search project see documentation: https://docs.google.com/document/d/1OnvJNVkhK5ATnhHaeSmz8Ze_Iw9ixXhfSxAL_BSqbuM/edit
+
+In order to ensure the quality of the compendium, we need to impose some heuristic and data-driven inclusion criteria. To do so we will look at some high-level characteristics of the compendium before narrowing in the the specific criteria we will use, acknowledging that they are specific to this compendium and may not necessarily generalize to other compendia.
+
+#### Outline
+
+1. Setup and data import
+3. Sparsity
+4. Genes with expected patterns
+5. Median expression
+6. Final criteria
+7. Save filtered compendia
+
+## 1. Setup and data import
+
+
+
+```{r, message=F, warning=F}
+library(ggplot2)
+library(ComplexHeatmap)
+library(kableExtra)
+library(eulerr)
+source('~/Dropbox (Hogan Lab)/Resources/Annotations/annotation_functions.R')
+source('~/Dropbox (Hogan Lab)/Resources/Scripts/fsqn.R')
+source('filter_functions.R')
+source('qc-dev/plotting_functions.R')
+```
+
+
+
+
+Load the array compendium on which eADAGE was trained for comparisons and reference as well as the PAO1- and PA14- aligned RNAseq compendia in both estimated counts and TPM forms resulting from the Salmon workflow.
+
+
+Note that row names are converted from the ensemble cDNA gene IDs to PAO1 numbers.
+
+```{r}
+
+#PAO1
+rnaseq_pao1_tpm <- read.csv('compendia_download/TPM_pao1_cdna_k15.csv', 
+                            stringsAsFactors = F, row.names = 1)[,-1]
+rownames(rnaseq_pao1_tpm) <- make.unique(sapply(rownames(rnaseq_pao1_tpm), 
+                                                function(x) cDNA_to_PAO1(x)))
+rnaseq_pao1_counts <- read.csv('compendia_download/num_reads_pao1_cdna_k15.csv', 
+                               stringsAsFactors = F, row.names = 1)[,-1]
+rownames(rnaseq_pao1_counts) <- make.unique(sapply(rownames(rnaseq_pao1_counts), 
+                                                   function(x) cDNA_to_PAO1(x)))
+
+#PA14
+rnaseq_pa14_tpm <- read.csv('compendia_download/TPM_pa14_cdna_k15.csv', 
+                            stringsAsFactors = F, row.names = 1)[,-1]
+rownames(rnaseq_pa14_tpm) <- make.unique(sapply(rownames(rnaseq_pa14_tpm), 
+                                                function(x) cDNA_to_PA14(x)))
+rnaseq_pa14_counts <- read.csv('compendia_download/num_reads_pa14_cdna_k15.csv', 
+                               stringsAsFactors = F, row.names = 1)[,-1]
+rownames(rnaseq_pa14_counts) <- make.unique(sapply(rownames(rnaseq_pa14_counts), 
+                                                   function(x) cDNA_to_PA14(x)))
+```
+
+
+
+
+# 2. Load Annotations
+
+```{r}
+run_table <- read.csv('compendia_download/SraRunTable.csv', 
+                      stringsAsFactors = F)
+```
+
+First load the annotations to see how many samples there are in each experiment.
+```{r, warning=F}
+ann_exp_groups <- sapply(colnames(rnaseq_pao1_tpm), function(x){
+  exp <- if(substr(x,1,regexpr('\\.',x)[1]-1) %in% run_table$Experiment){
+    run_table$SRA_study[ run_table$Experiment == substr(x,1,
+                                                        regexpr('\\.',x)[1]-1)]
+  }   else{
+    NA
+  }
+  exp[1]
+  }
+)
+
+#kable_classic(kable(head(sort(table(ann_exp_groups), decreasing = T), n=10), 
+#                    col.names = c("SRA Experiment","total # of samples"),
+#      caption = "10 largest experiments in the compendium and the number of samples each has"))
+```
+
+
+Strain
+
+```{r}
+seq_strain_ann_pao1 <- rowSums(apply(run_table, 2, FUN = function(x){
+  sapply(x, function(y){
+    grepl('PAO1',y) | grepl('PA01',y)
+  })
+})) > 0
+
+seq_strain_ann_pa14 <- rowSums(apply(run_table, 2, FUN = function(x){
+  sapply(x, function(y){
+    grepl('PA14',y)
+  })
+})) > 0
+
+seq_strain_ann <- sapply(c(1:nrow(run_table)), function(x){
+  if(seq_strain_ann_pao1[x]){
+    'PAO1'
+  } else if(seq_strain_ann_pa14[x]){
+    'PA14'
+  } else{'No annotation'}
+})
+
+names(seq_strain_ann) <- paste(run_table$Experiment,
+                               run_table$Experiment,'salmon',sep='.')
+seq_strain_ann_order <- seq_strain_ann[colnames(rnaseq_pao1_tpm)]
+```
+
+```{r, warning=F}
+accessory_compendia <- read.csv('compendia_download/PAO1_PA14_accessory_expression.csv', 
+                                stringsAsFactors = F, sep='\t')
+seq_strain_exp_order <- unlist(sapply(colnames(rnaseq_pao1_counts), function(x){
+  num <- substr(x,1,regexpr('.',x, fixed=T)[1]-1)
+  accessory_compendia$Strain.type_pao1[accessory_compendia$X == num][1]
+}))
+seq_strain_exp_order[is.na(seq_strain_exp_order)] <- "No annotation"
+
+
+``` 
+
+
+```{r}
+acc_genes <- read.csv('Dataset_S5_PAO1_and_PA14_Accessory_Genes - Accessory Genes (1).csv', stringsAsFactors = F)
+
+acc_genes$PAO1_Gene_Name <- sapply(acc_genes$PAO1_Locus_Tag, 
+                                   function(x) PAO1_to_name(x))
+
+acc_genes$PAO1_Gene_Description <- sapply(acc_genes$PAO1_Locus_Tag, 
+                                   function(x) PAO1_to_product(x))
+
+acc_genes$PA14_Gene_Name <- sapply(acc_genes$PA14_Locus_Tag, 
+                                   function(x) PA14_to_name(x))
+acc_genes$PA14_Gene_Description <- sapply(acc_genes$PA14_Locus_Tag, 
+                                   function(x) PA14_to_product(x))
+
+write.csv(acc_genes[,c(1,3,4,2,5,6)], "accessory_genes_lists.csv", row.names = F)
+```
+
+## 3. Sparsity 
+
+Although RNAseq data can be inherently sparse, perhaps reflecting the biological nature of gene expression and the prevalence of condition-dependent or accessory genes, if a gene expression profile is too sparse it could be an indication of low read depth or low-quality reads. 
+
+Using the set of genes that intersects the array probes, we can check for samples with too many unexpressed (or undetected) genes to add biological value to our compendium in which case including them will only add noise.
+
+The array compendium has a narrower distribution of sparse samples with the maximum number of undected genes (for biological or technical reasons) being less than 1,200 , or `r 120000 / nrow(rnaseq_pao1_tpm)` %, of genes.
+
+
+
+```{r, warning=F}
+par(mfrow=c(1,2))
+
+pao1_seq_zeros <- apply(rnaseq_pao1_counts, 2, FUN = function(x) sum( x  == 0))
+hist(pao1_seq_zeros, main = 'PAO1', breaks = 50)
+q <- quantile(pao1_seq_zeros, probs = c(.1,.2,.3,.4,.5,.6,.7,.8,.9,.95,.98))
+l <- sapply(q, function(x) abline(v = x, col='red', lty=2))
+
+pa14_seq_zeros <- apply(rnaseq_pa14_counts, 2, FUN = function(x) sum( x  == 0))
+hist(pa14_seq_zeros, main = 'PA14', breaks = 50)
+q <- quantile(pa14_seq_zeros, probs = c(.1,.2,.3,.4,.5,.6,.7,.8,.9,.95,.98))
+l <- sapply(q, function(x) abline(v = x, col='red', lty=2))
+
+
+
+```
+
+Using the above distributions we can determine the cutoff that will capture 95% of the samples.
+
+
+In addition to samples being too sparse, RNAseq samples that are not sparse enough can be indicative of technical complications such as DNA contamination. This is identifiable when genes that are typically very lowly expressed are unexpetedly highly expressed in a given sample.
+
+Knowing the wide range of gene expression values captured in RNAseq, it is adventageous to visualize counts and/or TPM values after log transformation. Note that zeros values remain zeros after transformation.
+
+
+
+Can sparsity be attributable to the expression patterns of a subset of genes
+
+
+
+```{r, warning=F}
+rnaseq_pao1_tpm_log <- data.frame(log(data.matrix(rnaseq_pao1_tpm)))
+rnaseq_pao1_tpm_log[rnaseq_pao1_tpm_log == -Inf] <- 0
+rnaseq_pao1_tpm_log[rnaseq_pao1_tpm_log < 0] <- 0
+
+rnaseq_pa14_tpm_log <- data.frame(log(data.matrix(rnaseq_pa14_tpm)))
+rnaseq_pa14_tpm_log[rnaseq_pa14_tpm_log == -Inf] <- 0
+rnaseq_pa14_tpm_log[rnaseq_pa14_tpm_log < 0] <- 0
+```
+
+
+Rather than plotting medians, the distributions may be distinguishable my their 25th percentile values.
+
+```{r, warning=F}
+
+par(mfrow=c(2,2))
+medians <- apply(rnaseq_pao1_tpm_log, 1, FUN = function(x) quantile(x, probs = c(.25,.75,.025,1))[1])
+hist(medians, main = "First Quartile PAO1", xlab = "Gene Expression")
+
+medians <- apply(rnaseq_pa14_tpm_log, 1, FUN = function(x) quantile(x, probs = c(.25,.75,.025,1))[1])
+hist(medians, main = "First Quartile PA14", xlab = "Gene Expression")
+
+medians <- apply(rnaseq_pao1_tpm_log, 1, FUN = function(x) quantile(x, probs = c(.25,.75,.025,1))[3])
+hist(medians, main = "First 2.5% PAO1", xlab = "Gene Expression")
+
+medians <- apply(rnaseq_pa14_tpm_log, 1, FUN = function(x) quantile(x, probs = c(.25,.75,.025,1))[3])
+hist(medians, main = "First 2.5% PA14", xlab = "Gene Expression")
+
+
+```
+A fair number of genes are lowly expressed at least 25% of the time. 
+
+Ww can then expect the distributions of gene expression per experiment to contain a spike at 0, which makes the datasets sparse.
+
+
+
+For most experiments at least 10% of the genes are lowly expressed.
+
+
+
+
+
+## 4. Genes by Expected patterns
+
+Using genes known to be stable in their expression as a normalization metric is commonly used in qRT analysis and other mRNA quantification techniques. It can provide internal controls and account for technical biases. The same concept can hold true when we look at gene expression across compendia. We can choose housekeeping genes for **P. aeruginosa** based on a publication and examine their expression in the array compendium.
+
+
+
+The following set of HK genes comes from Alqarni et al 2016, J Microbiol Methods. The lowly expressed genes were determined based on expression in the array compendium (see other analyses).
+
+```{r}
+hks_pao1 <- sapply(c('ppiD','rpoD','rpoS','proC','recA','rpsL','rho','oprL',
+                     'tipA','nadB'), 
+              function(x) name_to_PAO1(x))
+hks_pao1 <- hks_pao1[hks_pao1 %in% rownames(rnaseq_pao1_tpm_log)]
+
+hks_pa14 <- sapply(c('ppiD','rpoD','rpoS','proC','recA','rpsL','rho','oprL',
+                     'tipA','nadB'), 
+              function(x) name_to_PA14(x))
+hks_pa14 <- hks_pa14[hks_pa14 %in% rownames(rnaseq_pa14_tpm_log)]
+
+```
+
+
+```{r}
+#pdf("hk_genes.pdf", width=6,height=3)
+par(mfrow=c(1,2))
+hk_means_pao1 <- apply(rnaseq_pao1_tpm_log[hks_pao1,], 2, 
+                       FUN = function(x) mean(x))
+hist(hk_means_pao1, main = 'PAO1-aligned')
+q <- quantile(hk_means_pao1, probs = c(.1,.2,.3,.4,.5,.6,.7,.8,.9,1))
+abline(v = q[1], col='red', lty=2)
+abline(v = q[10], col='red', lty=2)
+
+hk_means_pa14 <- apply(rnaseq_pa14_tpm_log[hks_pa14,], 2, 
+                       FUN = function(x) mean(x))
+hist(hk_means_pa14, main = 'PAO1-aligned')
+q <- quantile(hk_means_pa14, probs = c(.1,.2,.3,.4,.5,.6,.7,.8,.9,1))
+abline(v = q[1], col='red', lty=2)
+abline(v = q[10], col='red', lty=2)
+
+
+#dev.off()
+```
+Overall, the HK genes apepar to be relatively highly expressed and have a fairly narrow range thus allowing for outliers to be excluded based on a band-pass filter.
+
+
+
+## 5. Set Final Criteria
+
+
+
+```{r}
+
+pao1_zeros <- quantile(apply(rnaseq_pao1_tpm_log[,
+                                                 seq_strain_ann_order == 'PAO1'], 
+                             2, FUN = function(x) sum( x  == 0)), 
+                       probs = c(.1,.9))
+
+pa14_zeros <- quantile(apply(rnaseq_pa14_tpm_log[,seq_strain_ann_order == 'PA14'], 
+                             2, FUN = function(x) sum( x  == 0)), 
+                       probs = c(.1,.9))
+
+
+pao1_hk <- quantile(apply(rnaseq_pao1_tpm_log[hks_pao1,
+                                              seq_strain_ann_order == 'PAO1'], 
+                          2, FUN = function(x) median(x)), probs = c(.2,.98))
+pa14_hk <- quantile(apply(rnaseq_pa14_tpm_log[hks_pa14,
+                                              seq_strain_ann_order == 'PA14'], 
+                          2, FUN = function(x) median(x)), probs = c(.2,.98))
+
+
+```
+
+```{r}
+#pdf('zeros_dists.pdf', width = 6, height=3)
+par(mfrow=c(2,2))
+hist(log(pao1_seq_zeros[seq_strain_ann_order == 'PAO1']), main = 'PAO1', 
+     breaks=25, xlab = 'Zeros')
+abline(v = log(pao1_zeros[1]), col='red', lty=2)
+abline(v = log(pao1_zeros[2]), col='red', lty=2)
+
+hist(log(pa14_seq_zeros[seq_strain_ann_order == 'PA14']), main = 'PA14', 
+     breaks=25,xlab = 'Zeros')
+abline(v = log(pa14_zeros[1]), col='red', lty=2)
+abline(v = log(pa14_zeros[2]), col='red', lty=2)
+
+hist(log(pao1_seq_zeros[]), main = 'PAO1', breaks=25, xlab = 'Zeros')
+abline(v = log(pao1_zeros[1]), col='red', lty=2)
+abline(v = log(pao1_zeros[2]), col='red', lty=2)
+
+hist(log(pa14_seq_zeros[]), main = 'PA14', breaks=25,xlab = 'Zeros')
+abline(v = log(pa14_zeros[1]), col='red', lty=2)
+abline(v = log(pa14_zeros[2]), col='red', lty=2)
+
+
+#dev.off()
+```
+
+
+
+```{r}
+#pdf("hk_genes_pao1_pa14_w_cutoffs.pdf", width=6,height=6)
+par(mfrow=c(2,2))
+hk_means_pao1 <- apply(rnaseq_pao1_tpm_log[hks_pao1,seq_strain_ann_order == 'PAO1'], 
+                       2, FUN = function(x) median(x))
+hist(hk_means_pao1, main = 'PAO1-aligned')
+abline(v = pao1_hk[1], col='red', lty=2)
+abline(v = pao1_hk[2], col='red', lty=2)
+
+hk_means_pa14 <- apply(rnaseq_pa14_tpm_log[hks_pa14,seq_strain_ann_order == 'PA14'], 
+                       2, FUN = function(x) median(x))
+hist(hk_means_pa14, main = 'PA14-aligned')
+abline(v = pa14_hk[1], col='red', lty=2)
+abline(v = pa14_hk[2], col='red', lty=2)
+
+hk_means_pao1 <- apply(rnaseq_pao1_tpm_log[hks_pao1,], 
+                       2, FUN = function(x) median(x))
+hist(hk_means_pao1, main = 'PAO1-aligned')
+abline(v = pao1_hk[1], col='red', lty=2)
+abline(v = pao1_hk[2], col='red', lty=2)
+
+hk_means_pa14 <- apply(rnaseq_pa14_tpm_log[hks_pa14,], 
+                       2, FUN = function(x) median(x))
+hist(hk_means_pa14, main = 'PA14-aligned')
+abline(v = pa14_hk[1], col='red', lty=2)
+abline(v = pa14_hk[2], col='red', lty=2)
+
+
+#dev.off()
+```
+
+
+```{r}
+co_df <- data.frame('PAO1_zeros' = pao1_zeros,
+                    'PA14_zeros' = pa14_zeros,
+                    'PAO1_hk' = pao1_hk,
+                    'PA14_hk' = pa14_hk,
+                    'strain' = seq_strain_ann_order,
+                    'Experiment' = names(hk_means_pao1))
+write.csv(co_df,'cutoff_stats_zp49.csv')
+```
+
+
+## 6. Apply
+```{r, warning=F}
+## PAO1
+filt_sp_comp_pao1_tpm <- filter_sparsity(rnaseq_pao1_tpm[rownames(rnaseq_pao1_tpm),],
+                                         max_zeros=pao1_zeros[2], 
+                                         min_zeros=pao1_zeros[1],
+                                         min_peak=0)
+
+filt_hk_comp_pao1_tpm <- filter_hks(rnaseq_pao1_tpm_log[rownames(rnaseq_pao1_tpm),],
+                                    hks_pao1, 
+                                    hk_min=pao1_hk[1], 
+                                    hk_max=pao1_hk[2])
+
+
+
+## PA14
+filt_sp_comp_pa14_tpm <- filter_sparsity(rnaseq_pa14_tpm[rownames(rnaseq_pa14_tpm),], 
+                                         max_zeros=pa14_zeros[2], 
+                                         min_zeros=pa14_zeros[1], 
+                                         min_peak=0)
+
+filt_hk_comp_pa14_tpm <- filter_hks(rnaseq_pa14_tpm_log[rownames(rnaseq_pa14_tpm),],
+                                    hks_pa14, 
+                                    hk_min=pa14_hk[1], 
+                                    hk_max=pa14_hk[2])
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+## 8. Write out Data
+
+
+
+
+```{r}
+#### PAO1
+out_rnaseq_pao1_tpm <- rnaseq_pao1_tpm[rownames(rnaseq_pao1_tpm), 
+                                       (filt_sp_comp_pao1_tpm & filt_hk_comp_pao1_tpm) | 
+                                         (filt_sp_comp_pa14_tpm & filt_hk_comp_pa14_tpm)]
+out_rnaseq_pao1_counts <- rnaseq_pao1_counts[rownames(rnaseq_pao1_tpm), 
+                                       (filt_sp_comp_pao1_tpm & filt_hk_comp_pao1_tpm) | 
+                                         (filt_sp_comp_pa14_tpm & filt_hk_comp_pa14_tpm)]
+
+write.csv(out_rnaseq_pao1_tpm, 'pao1_aligned_compendium_p2_filtered_tpm.csv')
+
+write.csv(out_rnaseq_pao1_counts, 'pao1_aligned_compendium_p2_filtered_counts.csv')
+
+
+#### PA14
+
+out_rnaseq_pa14_tpm <- rnaseq_pa14_tpm[rownames(rnaseq_pa14_tpm), 
+                                       (filt_sp_comp_pao1_tpm & 
+                                          filt_hk_comp_pao1_tpm) | 
+                                         (filt_sp_comp_pa14_tpm & filt_hk_comp_pa14_tpm)]
+out_rnaseq_pa14_counts <- rnaseq_pa14_counts[rownames(rnaseq_pa14_tpm), 
+                                             (filt_sp_comp_pao1_tpm & 
+                                                filt_hk_comp_pao1_tpm) | 
+                                               (filt_sp_comp_pa14_tpm & filt_hk_comp_pa14_tpm)]
+
+write.csv(out_rnaseq_pa14_tpm, 'pa14_aligned_compendium_p2_filtered_tpm.csv')
+
+write.csv(out_rnaseq_pa14_counts, 'pa14_aligned__compendium_p2_filtered_counts.csv')
+
+
+
+
+```
+
+# 7. Normalization
+
+
+```{r}
+meta <- data.frame(experiment = ann_exp_groups[colnames(out_rnaseq_pao1_counts)])
+
+dds_pao1 <- DESeqDataSetFromMatrix(countData = ceiling(out_rnaseq_pao1_counts)+1, colData = meta, design = ~ experiment)
+dds_pao1 <- estimateSizeFactors(dds_pao1)
+normalized_counts_pao1 <- counts(dds_pao1, normalized=TRUE)
+
+
+normalized_counts_pao1_log <- data.frame(log(data.matrix(normalized_counts_pao1)))
+normalized_counts_pao1_log[normalized_counts_pao1_log == -Inf] <- 0
+normalized_counts_pao1_log[normalized_counts_pao1_log < 0] <- 0
+
+dds_pa14 <- DESeqDataSetFromMatrix(countData = ceiling(out_rnaseq_pa14_counts)+1, colData = meta, design = ~ experiment)
+dds_pa14 <- estimateSizeFactors(dds_pa14)
+normalized_counts_pa14 <- counts(dds_pa14, normalized=TRUE)
+
+
+normalized_counts_pa14_log <- data.frame(log(data.matrix(normalized_counts_pa14)))
+normalized_counts_pa14_log[normalized_counts_pa14_log == -Inf] <- 0
+normalized_counts_pa14_log[normalized_counts_pa14_log < 0] <- 0
+```
+
+```{r}
+
+write.csv(normalized_counts_pao1, 'pao1_aligned_full_compendium_filtered_counts_norm.csv')
+write.csv(normalized_counts_pa14, 'pa14_aligned_full_compendium_filtered_counts_norm.csv')
+```
+
+# 6. Plot
+
+
+```{r}
+hks_pao1 <- sapply(c('ppiD','rpoD','rpoS','proC','recA','rpsL','rho','oprL',
+                     'tipA','nadB'), 
+              function(x) name_to_PAO1(x))
+hks_pao1 <- hks_pao1[hks_pao1 %in% rownames(rnaseq_pao1_tpm_log)]
+
+hks_pa14 <- sapply(c('ppiD','rpoD','rpoS','proC','recA','rpsL','rho','oprL',
+                     'tipA','nadB'), 
+              function(x) name_to_PA14(x))
+hks_pa14 <- hks_pa14[hks_pa14 %in% rownames(rnaseq_pa14_tpm_log)]
+
+
+#lgs_pao1 <- c('PA2228','PA2227','PA2226','PA2225','PA2223','PA2222',                   
+#         'PA0442','PA0498','PA0715','PA0716','PA0984','PA0993')
+#lgs_pao1 <- lgs[lgs %in% rownames(rnaseq_pao1_tpm_log)]
+#lgs_pa14 <- sapply(lgs_pao1, function(x) PAO1_to_PA14(x))
+#lgs_pa14 <- lgs_pa14[lgs_pa14 %in% rownames(rnaseq_pa14_tpm_log)]
+```
+
+```{r}
+ann_exps_groups_buddy <- c('grey',sapply(c(2:length(ann_exp_groups)), function(x) ifelse(ann_exp_groups[x] == ann_exp_groups[x-1], 'red','grey')))
+```
+
+
+```{r}
+library(RColorBrewer)
+ann_exp_groups_cols <- sample(brewer.pal(n = 8, name = "Dark2"), length(unique(ann_exp_groups)), replace=T)
+ann_exp_groups_cols <- rep(brewer.pal(n = 8, name = "Dark2"), length(unique(ann_exp_groups))/7)
+ann_exp_groups_cols <- ann_exp_groups_cols[1:length(unique(ann_exp_groups))]
+names(ann_exp_groups_cols) <- unique(ann_exp_groups)
+```
+
+
+
+```{r}
+filt_sp_pao1_tpm <- rnaseq_pao1_tpm[rownames(rnaseq_pao1_tpm), filt_sp_comp_pao1_tpm]
+filt_hk_pao1_tpm <- rnaseq_pao1_tpm[rownames(rnaseq_pao1_tpm), filt_hk_comp_pao1_tpm]
+
+filt_sp_pa14_tpm <- rnaseq_pa14_tpm[rownames(rnaseq_pa14_tpm), filt_sp_comp_pa14_tpm]
+filt_hk_pa14_tpm <- rnaseq_pa14_tpm[rownames(rnaseq_pa14_tpm), filt_hk_comp_pa14_tpm]
+```
+
+```{r}
+source('qc-dev/plotting_functions.R')
+```
+
+```{r}
+genes_50_r <- sample(rownames(rnaseq_pao1_tpm_log),50)
+normalized_counts_pao1_log <- hlog(normalized_counts_pao1)
+genes_50_r_pa14 <- sapply(genes_50_r, function(x) PAO1_to_PA14((x)))
+#genes_50_r_pa14 <- sample(rownames(rnaseq_pa14_tpm_log),50)
+normalized_counts_pa14_log <- hlog(normalized_counts_pa14)
+```
+
+```{r}
+png("pao1_heatmap_quant_annotatate_orange_purple.png", height = 8, width = 8, res=300, units='in')
+htq <- annotated_heatmap_quant(rnaseq_pao1_tpm_log[c(hks_pao1,c(), genes_50_r),],
+                  rnaseq_pao1_tpm_log,
+                  filt_sp_pao1,
+                  filt_hk_pao1,
+                  hks_pao1, c(),
+                  anns=T,
+                  ann_exp_groups,
+                  c('red'='#EF8B46','grey'='grey'))
+draw(htq,heatmap_legend_side = "bottom")
+dev.off()
+png("pao1_heatmap_filtered_quant_annotatate_orange_purple.png", height = 8, width = 8, res=300, units='in')
+htq <- annotated_heatmap_quant(normalized_counts_pao1_log[c(hks_pao1,c(), genes_50_r),],
+                  normalized_counts_pao1_log,
+                  rep('TRUE',ncol(normalized_counts_pao1)),
+                  rep('TRUE',ncol(normalized_counts_pao1)),
+                  hks_pao1, c(),
+                  anns=T,
+                  ann_exp_groups[colnames(normalized_counts_pao1)],
+                  c('red'='#EF8B46','grey'='grey'))
+draw(htq,heatmap_legend_side = "bottom")
+dev.off()
+```
+
+
+```{r}
+png("pa14_heatmap_quant_annotatate_orange_purple.png", height = 8, width = 8, res=300, units='in')
+htq <- annotated_heatmap_quant(rnaseq_pa14_tpm_log[c(hks_pa14,c(), genes_50_r_pa14),],
+                  rnaseq_pa14_tpm_log,
+                  filt_sp_pa14,
+                  filt_hk_pa14,
+                  hks_pa14, c(),
+                  anns=T,
+                  ann_exp_groups,
+                  c('red'='#EF8B46','grey'='grey'))
+draw(htq,heatmap_legend_side = "bottom")
+dev.off()
+png("pa14_heatmap_filtered_quant_annotatate_orange_purple.png", height = 8, width = 8, res=300, units='in')
+htq <- annotated_heatmap_quant(normalized_counts_pa14_log[c(hks_pa14,c(), genes_50_r_pa14),],
+                  normalized_counts_pa14_log,
+                  rep('TRUE',ncol(normalized_counts_pa14)),
+                  rep('TRUE',ncol(normalized_counts_pa14)),
+                  hks_pa14, c(),
+                  anns=T,
+                  ann_exp_groups[colnames(normalized_counts_pa14)],
+                  c('red'='#EF8B46','grey'='grey'))
+draw(htq,heatmap_legend_side = "bottom")
+dev.off()
+```
+
+
+
+
+
+
+
+```{r}
+zeros_df <- melt(data.frame('pao1_zeros' = pao1_seq_zeros,
+                       'pa14_zeros' = pa14_seq_zeros,
+                       'sample' = names(pao1_seq_zeros),
+                       'strain' = seq_strain_ann_order))
+```
+
+
+```{r}
+pz <- ggplot(zeros_df[zeros_df$variable == 'pao1_zeros',], aes(x=value)) +
+    geom_histogram(data = zeros_df[zeros_df$variable == 'pao1_zeros' & zeros_df$strain != 'PAO1',], fill = '#AF8DC3') +
+  geom_histogram(data = zeros_df[zeros_df$variable == 'pao1_zeros' & zeros_df$strain == 'PAO1',], fill = '#895881') +
+
+  geom_vline(xintercept = pao1_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_zeros[2], color = '#89A45E', lty=2) + 
+scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  xlab('# undetected trancripts') +
+  #geom_text(x=1.5,  y = 650, label = 'PAO1', color='#895881', size=2.5) +
+    theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 6) +
+  #theme_pubr() +
+  ggsave('pao1_zeros_new_hist.png', height=1.7, width=1.7)
+
+pz <- ggplot(zeros_df[zeros_df$variable == 'pao1_zeros',], aes(x=value)) +
+    geom_density(data = zeros_df[zeros_df$variable == 'pao1_zeros' & zeros_df$strain != 'PAO1',], fill = '#AF8DC3') +
+  geom_density(data = zeros_df[zeros_df$variable == 'pao1_zeros' & zeros_df$strain == 'PAO1',], fill = '#895881') +
+
+  geom_vline(xintercept = pao1_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_zeros[2], color = '#89A45E', lty=2) + 
+scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  xlab('# undetected trancripts') +
+  #geom_text(x=1.5,  y = 650, label = 'PAO1', color='#895881', size=2.5) +
+    theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 6) +
+  #theme_pubr() +
+  ggsave('pao1_zeros_new_density.png', height=1.7, width=1.7)
+pz
+
+pz <- ggplot(zeros_df[zeros_df$variable == 'pa14_zeros',], aes(x=value)) +
+    geom_histogram(data = zeros_df[zeros_df$variable == 'pa14_zeros' & zeros_df$strain != 'PA14',], fill = '#AF8DC3') +
+  geom_histogram(data = zeros_df[zeros_df$variable == 'pa14_zeros' & zeros_df$strain == 'PA14',], fill = '#895881') +
+
+  geom_vline(xintercept = pa14_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pa14_zeros[2], color = '#89A45E', lty=2) + 
+scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  xlab('# undetected trancripts') +
+  #geom_text(x=1.5,  y = 650, label = 'PA14', color='#895881', size=2.5) +
+    theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 6) +
+  #theme_pubr() +
+  ggsave('pa14_zeros_new_hist.png', height=1.7, width=1.7)
+
+pz <- ggplot(zeros_df[zeros_df$variable == 'pa14_zeros',], aes(x=value)) +
+    geom_density(data = zeros_df[zeros_df$variable == 'pa14_zeros' & zeros_df$strain != 'PA14',], fill = '#AF8DC3') +
+  geom_density(data = zeros_df[zeros_df$variable == 'pa14_zeros' & zeros_df$strain == 'PA14',], fill = '#895881') +
+
+  geom_vline(xintercept = pa14_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pa14_zeros[2], color = '#89A45E', lty=2) + 
+scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  xlab('# undetected trancripts') +
+  #geom_text(x=1.5,  y = 650, label = 'PA14', color='#895881', size=2.5) +
+    theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 6) +
+  #theme_pubr() +
+  ggsave('pa14_zeros_new_density.png', height=1.7, width=1.7)
+pz
+```
+
+
+```{r}
+ribo <- c('SRX2652936.SRX2652936.salmon', # ribosomes
+           'SRX2652934.SRX2652934.salmon',
+           'SRX2652932.SRX2652932.salmon',
+           'SRX2652930.SRX2652930.salmon',
+           'SRX2652928.SRX2652928.salmon',
+           'SRX2652926.SRX2652926.salmon',
+           'SRX2652924.SRX2652924.salmon',
+           'SRX2652922.SRX2652922.salmon',
+           'SRX2652920.SRX2652920.salmon',
+           'SRX2652918.SRX2652918.salmon')
+           
+rip <- c('SRX6747943.SRX6747943.salmon', #RIPseq
+           'SRX6747941.SRX6747941.salmon',
+           'SRX6747952.SRX6747952.salmon',
+           'SRX6747950.SRX6747950.salmon',
+           'SRX6747942.SRX6747942.salmon',
+           'SRX6747946.SRX6747946.salmon',
+           'SRX6747949.SRX6747949.salmon',
+           'SRX6747944.SRX6747944.salmon',
+           'SRX6747945.SRX6747945.salmon',
+           'SRX6747947.SRX6747947.salmon',
+           'SRX6747948.SRX6747948.salmon',
+           'SRX6747951.SRX6747951.salmon',
+           
+           'SRX853974.SRX853974.salmon',
+           'SRX853975.SRX853975.salmon',
+           'SRX853976.SRX853976.salmon')
+           
+gril <- c('SRX2255952.SRX2255952.salmon', #GRIL-seq
+           'SRX2255952.SRX2255952.salmon')#,
+           
+metat <- c('SRX9288333.SRX9288333.salmon', #meta-t
+           'SRX9288351.SRX9288351.salmon',
+           'SRX9288354.SRX9288354.salmon',
+           'SRX9288353.SRX9288353.salmon',
+           'SRX9288332.SRX9288332.salmon',
+           'SRX9288355.SRX9288355.salmon',
+           'SRX9288334.SRX9288334.salmon',
+           'SRX9288335.SRX9288335.salmon',
+           'SRX9288337.SRX9288337.salmon',
+           'SRX9288336.SRX9288336.salmon',
+           'SRX9288331.SRX9288331.salmon',
+           'SRX9288352.SRX9288352.salmon'
+           )
+
+probs <- c(ribo,rip,gril,metat)
+```
+
+
+```{r}
+
+zeros_unmelt <- data.frame('pao1_zeros' = pao1_seq_zeros,
+                       'pa14_zeros' = pa14_seq_zeros,
+                       'sample' = names(pao1_seq_zeros),
+                       'strain' = seq_strain_ann_order,
+                       'pass' = filt_sp_comp_pao1_tpm | 
+                         filt_sp_comp_pa14_tpm,
+                       'technicals' = sapply(names(pao1_seq_zeros),
+                                             function(x) x %in% probs),
+                       'tech_specs' = sapply(names(pao1_seq_zeros), 
+                                             function(x){
+                                               if (x %in% ribo){
+                                                 'ribo'
+                                               } else if( x %in% rip){
+                                                 'RIP'
+                                               } else if(x %in% gril){
+                                                   'GRIL'
+                                               } else if (x %in% metat){
+                                                 'meta-t'
+                                               } else {'rna-seq'}
+                                               }
+                                             )
+                       )
+
+zeros_unmelt$tech_specs <- factor(zeros_unmelt$tech_specs,
+                                     levels = c('rna-seq','ribo','RIP','GRIL','meta-t'))
+
+sum(!(filt_sp_comp_pa14_tpm | filt_sp_comp_pao1_tpm))
+```
+
+```{r, fig.height=1.7, fig.width=1.7, warning=F, message=F}
+library(scales)
+library(ggprism)
+library(ggExtra)
+require("gridExtra") 
+
+g <- ggplot(zeros_unmelt, aes(x=pao1_zeros, y=pa14_zeros)) +
+  geom_point(aes(fill=pass, color=factor(strain)), shape=21, alpha=1, size=1.5) +
+  scale_fill_manual(values=c('TRUE'='white','FALSE'='#E08241')) +
+  scale_color_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+    geom_vline(xintercept = pao1_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_zeros[2], color = '#89A45E', lty=2) +
+    geom_hline(yintercept = pa14_zeros[1], color = '#89A45E', lty=2) + 
+  geom_hline(yintercept = pa14_zeros[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 4) +
+  theme(legend.position = "none") +
+  ggsave('both_zeros_new_points.png', height=1.7, width=1.7)
+g
+gm <- ggMarginal(g, type='violin', groupColour=F, groupFill=T, size=3)
+png('both_zeros_new_points_vio_edge.png')
+gm
+dev.off()
+gm
+
+
+# Marginal density plot of x (top panel) 
+xdensity <- ggplot(zeros_unmelt, aes(x=pao1_zeros)) + 
+  scale_x_log10(labels=c()) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = strain), alpha=.8) + 
+  scale_fill_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey')) + 
+  guides(color = FALSE, fill = FALSE)+
+  labs(x="") +
+  geom_vline(xintercept = pao1_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_zeros[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 4)
+
+# Marginal density plot of y (right panel) 
+ydensity <- ggplot(zeros_unmelt, aes(x=pa14_zeros)) + 
+  scale_x_log10(labels=c()) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = strain), alpha=.8) + 
+  scale_fill_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey')) + 
+  guides(color = FALSE, fill = FALSE)+
+   geom_vline(xintercept = pa14_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pa14_zeros[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 4, axis_text_angle=0) +
+  labs(x="") +
+  coord_flip() 
+
+blankPlot <- ggplot()+geom_blank()+ theme_void()
+
+png('both_zeros_new_points_hist_edge_grid.png', width=2, height=2, units="in", res=300)
+grid.arrange(xdensity, blankPlot, g, ydensity, ncol=2, nrow=2, widths=c(2, .75), heights=c(.75, 2),padding = unit(0, "line"))
+dev.off()
+```
+
+
+
+
+
+```{r}
+g <- ggplot(zeros_unmelt, aes(x=pao1_zeros, y=pa14_zeros, color=strain)) +
+  geom_point(data = zeros_unmelt[zeros_unmelt$technicals == 'FALSE',],aes(fill=tech_specs), shape=21, size=1.5, alpha=0.5) +
+    geom_point(data = zeros_unmelt[zeros_unmelt$technicals == 'TRUE',],aes(fill=tech_specs), shape=21, size=1.5, alpha=0.5) +
+  scale_fill_manual(values=c('ribo'='#a70000','RIP'='#ff0000',
+                             'GRIL' = '#ff7b7b', 'meta-t' = '#ffbaba',
+                             'rna-seq' = 'white')) +
+  scale_color_manual(values=c('PAO1' = '#895881', 
+                              'PA14' = '#AF8DC3',
+                              'No annotation' = 'grey'))+
+  scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+    geom_vline(xintercept = pao1_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_zeros[2], color = '#89A45E', lty=2) +
+    geom_hline(yintercept = pa14_zeros[1], color = '#89A45E', lty=2) + 
+  geom_hline(yintercept = pa14_zeros[2], color = '#89A45E', lty=2) +
+  xlab("PAO1 undetected genes") + ylab("PA14 undetected genes") +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 5) +
+  
+   
+  guides(color = FALSE, fill = FALSE)#+
+  #ggsave('both_zeros_new_points.png', height=1.7, width=1.7)
+
+# Marginal density plot of x (top panel) 
+xdensity <- ggplot(zeros_unmelt, aes(x=pao1_zeros)) + 
+  scale_x_log10(labels=c()) + #labels=c()
+  #scale_x_continuous(labels=c())+
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = tech_specs), position='stack', alpha=.8) + #bins=50
+    scale_fill_manual(values=c('rna-seq' = 'grey',
+                               'ribo'='#a70000','RIP'='#ff0000',
+                             'GRIL' = '#ff7b7b', 'meta-t' = '#ffbaba'
+                             )) +
+    #geom_histogram(data = zeros_unmelt[zeros_unmelt$technicals == 'TRUE',],aes(fill = technicals), alpha=.8) + #bins=50
+  #scale_fill_manual(values=c('TRUE'='red','FALSE'='grey')) +
+  #scale_fill_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  guides(color = FALSE, fill = FALSE)+
+  labs(x="") +
+  geom_vline(xintercept = pao1_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_zeros[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 5)
+
+# Marginal density plot of y (right panel) 
+ydensity <- ggplot(zeros_unmelt, aes(x=pa14_zeros)) + 
+  scale_x_log10(labels=c()) +#labels=c()
+  #scale_x_continuous(labels=c()) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = tech_specs), position='stack', alpha=.8) + #bins=50
+    scale_fill_manual(values=c('rna-seq' = 'grey',
+                               'ribo'='#a70000','RIP'='#ff0000',
+                             'GRIL' = '#ff7b7b', 'meta-t' = '#ffbaba'
+                             )) +
+  #scale_fill_manual(values=c('TRUE'='red','FALSE'='grey')) +
+  #scale_fill_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  guides(color = FALSE, fill = FALSE)+
+   geom_vline(xintercept = pa14_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pa14_zeros[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 5, axis_text_angle=0) +
+  labs(x="") +
+  coord_flip() 
+
+blankPlot <- ggplot()+geom_blank()+ theme_void()
+
+png('both_zeros_new_points_hist_edge_tech_zp19_10_30.png', width=2, height=2, units="in", res=300)
+grid.arrange(xdensity, blankPlot, g, ydensity, ncol=2, nrow=2, widths=c(2, 1), heights=c(1, 2),padding = unit(0, "line"))
+dev.off()
+```
+
+```{r}
+g <- ggplot(zeros_unmelt, aes(x=pao1_zeros, y=pa14_zeros, color=strain)) +
+  geom_point(aes(fill=pass), shape=21, size=1.5, alpha=0.5) +
+  #scale_fill_manual(values=c('TRUE'='red','FALSE'='white')) +
+  scale_fill_manual(values=c('TRUE'='white','FALSE'='#E08241')) +
+  scale_color_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+    geom_vline(xintercept = pao1_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_zeros[2], color = '#89A45E', lty=2) +
+    geom_hline(yintercept = pa14_zeros[1], color = '#89A45E', lty=2) + 
+  geom_hline(yintercept = pa14_zeros[2], color = '#89A45E', lty=2) +
+  xlab("PAO1 undetected genes") + ylab("PA14 undetected genes") +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 5) +
+  
+   
+  guides(color = FALSE, fill = FALSE)#+
+  #ggsave('both_zeros_new_points.png', height=1.7, width=1.7)
+
+# Marginal density plot of x (top panel) 
+xdensity <- ggplot(zeros_unmelt, aes(x=pao1_zeros)) + 
+  scale_x_log10(labels=c()) + #labels=c()
+  #scale_x_continuous(labels=c())+
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = strain), alpha=.8) + #bins=50
+    #geom_histogram(data = zeros_unmelt[zeros_unmelt$technicals == 'TRUE',],aes(fill = technicals), alpha=.8) + #bins=50
+  #scale_fill_manual(values=c('TRUE'='red','FALSE'='grey')) +
+  scale_fill_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  guides(color = FALSE, fill = FALSE)+
+  labs(x="") +
+  geom_vline(xintercept = pao1_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_zeros[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 5)
+
+# Marginal density plot of y (right panel) 
+ydensity <- ggplot(zeros_unmelt, aes(x=pa14_zeros)) + 
+  scale_x_log10(labels=c()) +#labels=c()
+  #scale_x_continuous(labels=c()) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = strain), alpha=.8) + 
+  #scale_fill_manual(values=c('TRUE'='red','FALSE'='grey')) +
+  scale_fill_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  guides(color = FALSE, fill = FALSE)+
+   geom_vline(xintercept = pa14_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pa14_zeros[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 5, axis_text_angle=0) +
+  labs(x="") +
+  coord_flip() 
+
+blankPlot <- ggplot()+geom_blank()+ theme_void()
+
+png('both_zeros_new_points_hist_edge_filt_zp19_10_30.png', width=2, height=2, units="in", res=300)
+grid.arrange(xdensity, blankPlot, g, ydensity, ncol=2, nrow=2, widths=c(2, 1), heights=c(1, 2),padding = unit(0, "line"))
+dev.off()
+```
+
+
+```{r}
+g <- ggplot(zeros_unmelt, aes(x=pao1_zeros, y=pa14_zeros, color=strain)) +
+  geom_point(aes(fill=technicals), shape=21, alpha=0.25) +
+  scale_fill_manual(values=c('TRUE'='red','FALSE'='white')) +
+  scale_color_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+    geom_vline(xintercept = pao1_zeros[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_zeros[2], color = '#89A45E', lty=2) +
+    geom_hline(yintercept = pa14_zeros[1], color = '#89A45E', lty=2) + 
+  geom_hline(yintercept = pa14_zeros[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 6) +
+  ggsave('both_zeros_new_points_technicals_10_29.png', height=1.7, width=1.7)
+g
+```
+
+
+```{r}
+hks_df <- melt(data.frame('pao1_hk_median' = hk_means_pao1,
+                       'pa14_hk_median' = hk_means_pa14,
+                       'sample' = names(pao1_seq_zeros),
+                       'strain' = seq_strain_ann_order))
+```
+
+
+```{r}
+pz <- ggplot(hks_df[hks_df$variable == 'pao1_hk_median',], aes(x=value)) +
+    geom_histogram(data = hks_df[hks_df$variable == 'pao1_hk_median' & hks_df$strain != 'PAO1',], fill = '#AF8DC3', alpha=0.5) +
+  geom_histogram(data = hks_df[hks_df$variable == 'pao1_hk_median' & hks_df$strain == 'PAO1',], fill = '#895881', alpha=0.5) +
+
+  geom_vline(xintercept = pao1_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_hk[2], color = '#89A45E', lty=2) + 
+#scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  xlab('# undetected trancripts') +
+  #geom_text(x=1.5,  y = 650, label = 'PAO1', color='#895881', size=2.5) +
+    theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 6) +
+  #theme_pubr() +
+  ggsave('pao1_hks_new_hist.png', height=1.7, width=1.7)
+
+pz <- ggplot(hks_df[hks_df$variable == 'pao1_hk_median',], aes(x=value)) +
+    geom_density(data = hks_df[hks_df$variable == 'pao1_hk_median' & hks_df$strain != 'PAO1',], fill = '#AF8DC3', alpha=0.5) +
+  geom_density(data = hks_df[hks_df$variable == 'pao1_hk_median' & hks_df$strain == 'PAO1',], fill = '#895881', alpha=0.5) +
+
+  geom_vline(xintercept = pao1_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_hk[2], color = '#89A45E', lty=2) + 
+#scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  xlab('# undetected trancripts') +
+  #geom_text(x=1.5,  y = 650, label = 'PAO1', color='#895881', size=2.5) +
+    theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 6) +
+  #theme_pubr() +
+  ggsave('pao1_hks_new_density.png', height=1.7, width=1.7)
+pz
+
+pz <- ggplot(hks_df[hks_df$variable == 'pa14_hk_median',], aes(x=value)) +
+    geom_histogram(data = hks_df[hks_df$variable == 'pa14_hk_median' & hks_df$strain != 'PA14',], fill = '#AF8DC3', alpha=0.5) +
+  geom_histogram(data = hks_df[hks_df$variable == 'pa14_hk_median' & hks_df$strain == 'PA14',], fill = '#895881', alpha=0.5) +
+
+  geom_vline(xintercept = pa14_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pa14_hk[2], color = '#89A45E', lty=2) + 
+#scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  xlab('# undetected trancripts') +
+  #geom_text(x=1.5,  y = 650, label = 'PA14', color='#895881', size=2.5) +
+    theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 6) +
+  #theme_pubr() +
+  ggsave('pa14_hks_new_hist.png', height=1.7, width=1.7)
+
+pz <- ggplot(hks_df[hks_df$variable == 'pa14_hk_median',], aes(x=value)) +
+    geom_density(data = hks_df[hks_df$variable == 'pa14_hk_median' & hks_df$strain != 'PA14',], fill = '#AF8DC3', alpha=0.5) +
+  geom_density(data = hks_df[hks_df$variable == 'pa14_hk_median' & hks_df$strain == 'PA14',], fill = '#895881', alpha=0.5) +
+
+  geom_vline(xintercept = pa14_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pa14_hk[2], color = '#89A45E', lty=2) + 
+#scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  xlab('# undetected trancripts') +
+  #geom_text(x=1.5,  y = 650, label = 'PA14', color='#895881', size=2.5) +
+    theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 6) +
+  #theme_pubr() +
+  ggsave('pa14_hks_new_density.png', height=1.7, width=1.7)
+pz
+```
+
+
+
+```{r}
+
+hk_unmelt <- data.frame('pao1_hk_means' = hk_means_pao1,
+                       'pa14_hk_means' = hk_means_pa14,
+                       'sample' = names(pa14_seq_zeros),
+                       'strain' = factor(seq_strain_ann_order, 
+                                         levels = c('PAO1','PA14',
+                                                    'No annotation')),
+                       'pass' = filt_hk_comp_pao1_tpm | 
+                         filt_hk_comp_pa14_tpm,
+                       'technicals' = sapply(names(pao1_seq_zeros),
+                                             function(x) x %in% probs),
+                       'tech_specs' = sapply(names(pao1_seq_zeros), 
+                                             function(x){
+                                               if (x %in% ribo){
+                                                 'ribo'
+                                               } else if( x %in% rip){
+                                                 'RIP'
+                                               } else if(x %in% gril){
+                                                   'GRIL'
+                                               } else if (x %in% metat){
+                                                 'meta-t'
+                                               } else {'rna-seq'}
+                                               }
+                                             )
+                       )
+
+hk_unmelt$tech_specs <- factor(zeros_unmelt$tech_specs,
+                                     levels = c('rna-seq','ribo','RIP','GRIL','meta-t'))
+```
+
+
+
+
+```{r}
+g <- ggplot(hk_unmelt, aes(x=pao1_hk_means, y=pa14_hk_means, color=strain)) +
+  geom_point(aes(fill=pass), shape=21, size=1.5, alpha=0.5) +
+  scale_fill_manual(values=c('TRUE'='white','FALSE'='#E08241')) +
+  scale_color_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  #scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  #scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+    geom_vline(xintercept = pao1_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_hk[2], color = '#89A45E', lty=2) +
+    geom_hline(yintercept = pa14_hk[1], color = '#89A45E', lty=2) + 
+  geom_hline(yintercept = pa14_hk[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 4) +
+   
+  guides(color = FALSE, fill = FALSE)+
+  ggsave('both_hks_new_points.png', height=1.7, width=2.4)
+
+
+
+
+# Marginal density plot of x (top panel) 
+xdensity <- ggplot(hk_unmelt, aes(x=pao1_hk_means)) + 
+  #scale_x_log10(labels=c()) +
+  scale_x_continuous(labels=c())+
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = strain), alpha=.8) + 
+  scale_fill_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey')) + 
+  guides(color = FALSE, fill = FALSE)+
+  labs(x="") +
+  geom_vline(xintercept = pao1_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_hk[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 4)
+
+# Marginal density plot of y (right panel) 
+ydensity <- ggplot(hk_unmelt, aes(x=pa14_hk_means)) + 
+  #scale_x_log10(labels=c()) +
+  scale_x_continuous(labels=c()) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = strain), alpha=.8) + 
+  scale_fill_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey')) + 
+  guides(color = FALSE, fill = FALSE)+
+   geom_vline(xintercept = pa14_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pa14_hk[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 4, axis_text_angle=0) +
+  labs(x="") +
+  coord_flip() 
+
+blankPlot <- ggplot()+geom_blank()+ theme_void()
+
+png('both_hk_new_points_hist_edge_grid.png', width=2, height=2, units="in", res=300)
+grid.arrange(xdensity, blankPlot, g, ydensity, ncol=2, nrow=2, widths=c(2, .75), heights=c(.75, 2),padding = unit(0, "line"))
+dev.off()
+```
+
+
+
+
+```{r}
+g <- ggplot(hk_unmelt, aes(x=pao1_hk_means, y=pa14_hk_means, color=strain)) +
+  geom_point(aes(fill=technicals), shape=21, size=1.5, alpha=0.5) +
+  scale_fill_manual(values=c('TRUE'='red','FALSE'='white')) +
+  scale_color_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  #scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  #scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+    geom_vline(xintercept = pao1_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_hk[2], color = '#89A45E', lty=2) +
+    geom_hline(yintercept = pa14_hk[1], color = '#89A45E', lty=2) + 
+  geom_hline(yintercept = pa14_hk[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 5) +
+   
+  guides(color = FALSE, fill = FALSE)+
+  ggsave('both_hks_new_points_10_29.png', height=1.7, width=1.7)
+g
+# Marginal density plot of x (top panel) 
+xdensity <- ggplot(hk_unmelt, aes(x=pao1_hk_means)) + 
+  #scale_x_log10(labels=c()) +
+  scale_x_continuous(labels=c())+
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = technicals), alpha=.8) + 
+  scale_fill_manual(values=c('TRUE'='red','FALSE'='grey')) +
+  guides(color = FALSE, fill = FALSE)+
+  labs(x="") +
+  geom_vline(xintercept = pao1_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_hk[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 4)
+
+# Marginal density plot of y (right panel) 
+ydensity <- ggplot(hk_unmelt, aes(x=pa14_hk_means)) + 
+  #scale_x_log10(labels=c()) +
+  scale_x_continuous(labels=c()) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = technicals), alpha=.8) + 
+  scale_fill_manual(values=c('TRUE'='red','FALSE'='grey')) +
+  guides(color = FALSE, fill = FALSE)+
+   geom_vline(xintercept = pa14_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pa14_hk[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 4, axis_text_angle=0) +
+  labs(x="") +
+  coord_flip() 
+
+blankPlot <- ggplot()+geom_blank()+ theme_void()
+
+png('both_hk_new_points_hist_edge_grid_techs.png', width=2, height=2, units="in", res=300)
+grid.arrange(xdensity, blankPlot, g, ydensity, ncol=2, nrow=2, widths=c(2, .75), heights=c(.75, 2),padding = unit(0, "line"))
+dev.off()
+```
+
+
+
+```{r}
+g <- ggplot(hk_unmelt, aes(x=pao1_hk_means, y=pa14_hk_means, color=strain)) +
+  geom_point(aes(fill=pass), shape=21, size=1.5) +
+  scale_fill_manual(values=c('TRUE'='white','FALSE'='#E08241')) +
+  scale_color_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  #scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  #scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+    geom_vline(xintercept = pao1_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_hk[2], color = '#89A45E', lty=2) +
+    geom_hline(yintercept = pa14_hk[1], color = '#89A45E', lty=2) + 
+  geom_hline(yintercept = pa14_hk[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 6) +
+  ggsave('both_hks_new_points.png', height=1.7, width=2.4)
+g
+```
+
+```{r}
+g <- ggplot(hk_unmelt, aes(x=pao1_hk_means, y=pa14_hk_means, color=strain)) +
+  geom_point(data = zeros_unmelt[hk_unmelt$technicals == 'FALSE',],aes(fill=technicals), shape=21, size=1.5, alpha=0.5) +
+    geom_point(data = hk_unmelt[zeros_unmelt$technicals == 'TRUE',],aes(fill=technicals), shape=21, size=1.5, alpha=0.5) +
+  scale_fill_manual(values=c('TRUE'='red','FALSE'='white')) +
+  scale_color_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  #scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  #scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+    geom_vline(xintercept = pao1_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_hk[2], color = '#89A45E', lty=2) +
+    geom_hline(yintercept = pa14_hk[1], color = '#89A45E', lty=2) + 
+  geom_hline(yintercept = pa14_hk[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 6) +
+  ggsave('both_hks_new_points_technicals_10_30.png', height=1.7, width=2.4)
+g
+```
+
+
+
+```{r}
+
+g <- ggplot(hk_unmelt, aes(x=pao1_hk_means, y=pa14_hk_means, color=strain)) +
+  geom_point(data = hk_unmelt[hk_unmelt$technicals == 'FALSE',],aes(fill=tech_specs), shape=21, size=1.5, alpha=0.5) +
+    geom_point(data = hk_unmelt[zeros_unmelt$technicals == 'TRUE',],aes(fill=tech_specs), shape=21, size=1.5, alpha=0.5) +
+      scale_fill_manual(values=c('rna-seq' = 'grey',
+                               'ribo'='#a70000','RIP'='#ff0000',
+                             'GRIL' = '#ff7b7b', 'meta-t' = '#ffbaba'
+                             )) +
+  #scale_fill_manual(values=c('TRUE'='red','FALSE'='white')) +
+  scale_color_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  #scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  #scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+    geom_vline(xintercept = pao1_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_hk[2], color = '#89A45E', lty=2) +
+    geom_hline(yintercept = pa14_hk[1], color = '#89A45E', lty=2) + 
+  geom_hline(yintercept = pa14_hk[2], color = '#89A45E', lty=2) +
+  xlab("PAO1HK genes (mean TPM)") + ylab("PA14 HK genes (mean TPM)") +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 5) +
+   
+  guides(color = FALSE, fill = FALSE)#+
+  #ggsave('both_zeros_new_points.png', height=1.7, width=1.7)
+
+# Marginal density plot of x (top panel) 
+xdensity <- ggplot(hk_unmelt, aes(x=pao1_hk_means)) + 
+  #scale_x_log10(labels=c()) + #labels=c()
+  scale_x_continuous(labels=c())+
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = tech_specs), alpha=.8) + #bins=50
+    #geom_histogram(data = zeros_unmelt[zeros_unmelt$technicals == 'TRUE',],aes(fill = technicals), alpha=.8) + #bins=50
+  #scale_fill_manual(values=c('TRUE'='red','FALSE'='grey')) +
+      scale_fill_manual(values=c('rna-seq' = 'grey',
+                               'ribo'='#a70000','RIP'='#ff0000',
+                             'GRIL' = '#ff7b7b', 'meta-t' = '#ffbaba'
+                             )) +
+  #scale_fill_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  guides(color = FALSE, fill = FALSE)+
+  labs(x="") +
+  geom_vline(xintercept = pao1_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_hk[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 5)
+
+# Marginal density plot of y (right panel) 
+ydensity <- ggplot(hk_unmelt, aes(x=pa14_hk_means)) + 
+  #scale_x_log10(labels=c()) +#labels=c()
+  scale_x_continuous(labels=c()) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = tech_specs), alpha=.8) + 
+  #scale_fill_manual(values=c('TRUE'='red','FALSE'='grey')) +
+      scale_fill_manual(values=c('rna-seq' = 'grey',
+                               'ribo'='#a70000','RIP'='#ff0000',
+                             'GRIL' = '#ff7b7b', 'meta-t' = '#ffbaba'
+                             )) +
+  #scale_fill_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  guides(color = FALSE, fill = FALSE)+
+   geom_vline(xintercept = pa14_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pa14_hk[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 5, axis_text_angle=0) +
+  labs(x="") +
+  coord_flip() 
+
+blankPlot <- ggplot()+geom_blank()+ theme_void()
+
+png('both_hks_new_points_hist_edge_grid_techs_zp20_10_30.png', width=2, height=2, units="in", res=300)
+grid.arrange(xdensity, blankPlot, g, ydensity, ncol=2, nrow=2, widths=c(2, 1), heights=c(1, 2),padding = unit(0, "line"))
+dev.off()
+```
+
+
+```{r}
+
+g <- ggplot(hk_unmelt, aes(x=pao1_hk_means, y=pa14_hk_means, color=strain)) +
+  geom_point(data = hk_unmelt[hk_unmelt$technicals == 'FALSE',],aes(fill=pass), shape=21, size=1.5, alpha=0.5) +
+    geom_point(data = hk_unmelt[zeros_unmelt$technicals == 'TRUE',],aes(fill=pass), shape=21, size=1.5, alpha=0.5) +
+  #scale_fill_manual(values=c('TRUE'='red','FALSE'='white')) +
+  scale_fill_manual(values=c('TRUE'='white','FALSE'='#E08241')) +
+  scale_color_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  #scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  #scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+    geom_vline(xintercept = pao1_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_hk[2], color = '#89A45E', lty=2) +
+    geom_hline(yintercept = pa14_hk[1], color = '#89A45E', lty=2) + 
+  geom_hline(yintercept = pa14_hk[2], color = '#89A45E', lty=2) +
+  xlab("PAO1 HK genes (mean TPM)") + ylab("PA14 HK genes (mean TPM)") +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 5) +
+   
+  guides(color = FALSE, fill = FALSE)#+
+  #ggsave('both_zeros_new_points.png', height=1.7, width=1.7)
+
+# Marginal density plot of x (top panel) 
+xdensity <- ggplot(hk_unmelt, aes(x=pao1_hk_means)) + 
+  #scale_x_log10(labels=c()) + #labels=c()
+  scale_x_continuous(labels=c())+
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = strain), alpha=.8) + #bins=50
+    #geom_histogram(data = zeros_unmelt[zeros_unmelt$technicals == 'TRUE',],aes(fill = technicals), alpha=.8) + #bins=50
+  #scale_fill_manual(values=c('TRUE'='red','FALSE'='grey')) +
+  #scale_fill_manual(values=c('TRUE'='white','FALSE'='#E08241')) +
+  scale_fill_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  guides(color = FALSE, fill = FALSE)+
+  labs(x="") +
+  geom_vline(xintercept = pao1_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pao1_hk[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 5)
+
+# Marginal density plot of y (right panel) 
+ydensity <- ggplot(hk_unmelt, aes(x=pa14_hk_means)) + 
+  #scale_x_log10(labels=c()) +#labels=c()
+  scale_x_continuous(labels=c()) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  geom_histogram(aes(fill = strain), alpha=.8) + 
+  #scale_fill_manual(values=c('TRUE'='white','FALSE'='#E08241')) +
+  #scale_fill_manual(values=c('TRUE'='red','FALSE'='grey')) +
+  scale_fill_manual(values=c('PAO1' = '#895881', 'PA14' = '#AF8DC3','No annotation' = 'grey'))+
+  guides(color = FALSE, fill = FALSE)+
+   geom_vline(xintercept = pa14_hk[1], color = '#89A45E', lty=2) + 
+  geom_vline(xintercept = pa14_hk[2], color = '#89A45E', lty=2) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 5, axis_text_angle=0) +
+  labs(x="") +
+  coord_flip() 
+
+blankPlot <- ggplot()+geom_blank()+ theme_void()
+
+png('both_hks_new_points_hist_edge_filt_zp20_10_30.png', width=2, height=2, units="in", res=300)
+grid.arrange(xdensity, blankPlot, g, ydensity, ncol=2, nrow=2, widths=c(2, 1), heights=c(1, 2),padding = unit(0, "line"))
+dev.off()
+```
+
+
+
+```{r, warning=F}
+h_values <- c(0,0.025,0.05, .1,.2,.3,.4)
+zeros_hk_adjust <- lapply(h_values, function(h){
+  
+  
+  pao1_hk <- quantile(apply(rnaseq_pao1_tpm_log[hks,seq_strain_ann_order == 'PAO1'], 2, FUN = function(x) median(x)), probs = c(h,.975))
+  pa14_hk <- quantile(apply(rnaseq_pa14_tpm_log[hks_pa14,seq_strain_ann_order == 'PA14'], 2, FUN = function(x) median(x)), probs = c(h,.975))
+
+  filt_hk_comp_pao1_tpm <- filter_hks(rnaseq_pao1_tpm_log[rownames(rnaseq_pao1_tpm),],hks, hk_min=pao1_hk[1], hk_max=pao1_hk[2])
+  filt_hk_comp_pa14_tpm <- filter_hks(rnaseq_pa14_tpm_log[rownames(rnaseq_pa14_tpm),],hks_pa14, hk_min=pa14_hk[1], hk_max=pa14_hk[2])
+  
+  z_values <- c(0,.1,.2,.3,.4,.5,.6,.7,.8)
+  filtered_comp_list <- zeros_adjust_fun(z_values ,filt_hk_comp_pao1_tpm, filt_hk_comp_pa14_tpm)
+  names(filtered_comp_list) <- z_values
+  filtered_comp_list
+})
+```
+```{r, warning=F, message=F}
+#pdf("pao1_heamtap_zp2.pdf", height = 6, width = 12)
+genes_50_r <- sample(rownames(rnaseq_pao1_tpm_log),50)
+ht <- annotated_heatmap(rnaseq_pao1_tpm_log[c(hks_pao1,lgs_pao1, genes_50_r),],
+                  rnaseq_pao1_counts,
+                  filt_sp_comp_pao1_tpm,
+                  filt_hk_comp_pao1_tpm,
+                  hks_pao1, lgs_pao1,
+                  anns=T)
+draw(ht,heatmap_legend_side = "bottom")
+#dev.off()
+```
+
+
+```{r, warning=F, message=F}
+#pdf("pao1_heamtap_zp2.pdf", height = 6, width = 12)
+genes_50_r_14 <- sample(rownames(rnaseq_pa14_tpm_log),50)
+ht <- annotated_heatmap(rnaseq_pa14_tpm_log[c(hks_pa14,lgs_pa14, genes_50_r_14),],
+                  rnaseq_pa14_counts,
+                  filt_sp_comp_pa14_tpm,
+                  filt_hk_comp_pa14_tpm,
+                  hks_pa14, lgs_pa14,
+                  anns=T)
+draw(ht,heatmap_legend_side = "bottom")
+#dev.off()
+```
+
+
+
+
+```{r}
+ha_col <- HeatmapAnnotation(soi = anno_mark(at = ))
+
+vre_genes <- unlist(strsplit(regs$Genes[regs$Regulon == 'VreI_regulon'], split=';'))
+h <- Heatmap(rnaseq_pao1_tpm_log[vre_genes,],
+             width = ncol(rnaseq_pao1_tpm_log)*unit(0.05, "mm"), 
+             height = length(vre_genes)*unit(2, "mm"),
+             col = c('#7570B3','#F5D992','#E08241'),
+             show_column_names = F, 
+                  show_row_names=T, 
+                  row_labels = sapply(vre_genes, function(x) PAO1_to_name(x)),
+                  row_names_gp = gpar(fontsize=6),
+             top_annotation = ha_col,
+                  heatmap_legend_param = list(
+                    title = "logTPM",
+                    direction="horizontal"#,
+                    #legend_width= unit(4,"cm")
+                  )#'#7587C4',
+             )
+draw(h)
+```
+
+
+
+
+
+
+
+
+# 7. Summary of filtered datasets
+
+
+
+
+
+
+
+
+
+```{r}
+pao1_t<- table(ann_exp_groups[!
+                              (filt_sp_comp_pao1_tpm 
+                               & filt_hk_comp_pao1_tpm)])
+
+pao1_b_t<- table(ann_exp_groups[!
+                              (filt_sp_comp_pao1_tpm 
+                               | filt_hk_comp_pao1_tpm)])
+
+pao1_x_t<- table(ann_exp_groups[xor(filt_sp_comp_pao1_tpm, 
+                                filt_hk_comp_pao1_tpm)])
+
+pao1_sp_t <- table(ann_exp_groups[!
+                                 (filt_sp_comp_pao1_tpm 
+                                 )])
+
+
+
+pao1_hk_t <- table(ann_exp_groups[!
+                                 (
+                                  filt_hk_comp_pao1_tpm 
+                                  )])
+
+
+
+
+ugs <- unique(names(pao1_t))
+pao1_summ_t <- data.frame('Experiment' = ugs,
+                          'Strain' = all_t_s[ugs,'strain'], 
+                          'pao1_or' = as.numeric(pao1_t[ugs]),
+                          'pao1_and' = as.numeric(pao1_b_t[ugs]),
+                          'pao1_xor' = as.numeric(pao1_x_t[ugs]),
+                          'pao1_HK' =  as.numeric(pao1_hk_t[ugs]), 
+                          
+                          'pao1_sparsity' = as.numeric(pao1_sp_t[ugs]),
+                          
+                          'samples_in_exp' = as.numeric(all_t[ugs]))
+
+pao1_summ_t[is.na(pao1_summ_t)] <- 0
+
+kable_classic(kable(pao1_summ_t[head(order(pao1_summ_t[,4], decreasing = T), n=10),], 
+                    row.names = F,
+                    caption = "Experiments containing the most samples that were removed from the final, filtered compendium (PAO1 aligned)"))
+```
+
+```{r}
+save_kable(
+kable_classic(kable(pao1_summ_t[head(order(pao1_summ_t[,3], decreasing = T), n=Inf),], 
+                    row.names = F,
+                    caption = "Experiments containing the most samples that were removed from the final, filtered compendium (PAO1 aligned)")),
+  'temp.pdf',
+  bs_theme = "default",
+  self_contained = TRUE,
+  extra_dependencies = NULL,
+  latex_header_includes = NULL,
+  keep_tex = FALSE,
+  density = 300
+)
+write.csv(pao1_summ_t[head(order(pao1_summ_t[,3], decreasing = T), n=Inf),],
+          row.names = F,
+          'filter_summary_table_breakout_zp2.csv')
+```
+
+
+
+```{r}
+pa14_t<- table(ann_exp_groups[!
+                              (filt_sp_comp_pa14_tpm 
+                               & filt_hk_comp_pa14_tpm)])
+
+pa14_b_t<- table(ann_exp_groups[!
+                              (filt_sp_comp_pa14_tpm 
+                               | filt_hk_comp_pa14_tpm)])
+
+pa14_x_t<- table(ann_exp_groups[xor(filt_sp_comp_pao1_tpm, 
+                                filt_hk_comp_pa14_tpm)])
+
+pa14_sp_t <- table(ann_exp_groups[!
+                                 (filt_sp_comp_pa14_tpm 
+                                 )])
+
+
+
+pa14_hk_t <- table(ann_exp_groups[!
+                                 (
+                                  filt_hk_comp_pa14_tpm 
+                                  )])
+
+
+
+
+ugs <- unique(names(pa14_t))
+pa14_summ_t <- data.frame('Experiment' = ugs,
+                          'Strain' = all_t_s[ugs,'strain'], 
+                          'pa14_or' = as.numeric(pa14_t[ugs]),
+                          'pa14_and' = as.numeric(pa14_b_t[ugs]),
+                          'pa14_xor' = as.numeric(pa14_x_t[ugs]),
+                          'pa14_HK' =  as.numeric(pa14_hk_t[ugs]), 
+                          
+                          'pa14_sparsity' = as.numeric(pa14_sp_t[ugs]),
+                          
+                          'samples_in_exp' = as.numeric(all_t[ugs]))
+
+pa14_summ_t[is.na(pa14_summ_t)] <- 0
+
+kable_classic(kable(pa14_summ_t[head(order(pa14_summ_t[,4], decreasing = T), n=10),], 
+                    row.names = F,
+                    caption = "Experiments containing the most samples that were removed from the final, filtered compendium (PAO1 aligned)"))
+```
+
+```{r}
+# must meet all PAO1-based criteria
+pao1_t<- table(ann_exp_groups[!
+                              (filt_sp_comp_pao1_tpm 
+                               & filt_hk_comp_pao1_tpm)])
+
+pa14_only <- table(ann_exp_groups[
+                                 (filt_sp_comp_pao1_tpm 
+                                  & filt_hk_comp_pao1_tpm) &
+                                   !(filt_sp_comp_pa14_tpm 
+                                  & filt_hk_comp_pa14_tpm) ])
+pao1_only <- table(ann_exp_groups[
+                                 (filt_sp_comp_pa14_tpm 
+                                  & filt_hk_comp_pa14_tpm) &
+                                   !(filt_sp_comp_pao1_tpm 
+                                  & filt_hk_comp_pao1_tpm)])
+
+pao1_both <- table(ann_exp_groups[
+                                 !((filt_sp_comp_pao1_tpm 
+                                  & filt_hk_comp_pao1_tpm) |
+                                   (filt_sp_comp_pa14_tpm 
+                                  & filt_hk_comp_pa14_tpm))])
+
+
+
+all_t <- table(ann_exp_groups)
+
+ugs <- unique(names(pao1_t))
+
+summ_t <- data.frame('Experiment' = ugs, 
+                     'passed_PAO1' = as.numeric(pao1_only[ugs]),
+                     'passed_PA14' = as.numeric(pa14_only[ugs]),
+                     'passed_crit' = as.numeric(pao1_t[ugs]))
+
+
+ann_exp_groups[is.na(ann_exp_groups)] <- "No group"
+all_t_s <- data.frame('groups' = ann_exp_groups,
+                          'strain' = seq_strain_order)
+rownames(all_t_s) <- make.unique(as.character(all_t_s$groups))
+
+summ_t_strain <- data.frame('Experiment' = ugs,
+                            'Strain' = all_t_s[ugs,'strain'], 
+                            'Description' = rep("",length(all_t_s[ugs,'strain'])), 
+                            'Notes' = rep("",length(all_t_s[ugs,'strain'])), 
+                            'failed only PAO1' = as.numeric(pao1_only[ugs]),
+                            'failed only PA14' = as.numeric(pa14_only[ugs]),
+                            'failed both' = as.numeric(pao1_both[ugs]),
+                            'samples_in_exp' = as.numeric(all_t[ugs]))
+
+summ_t_strain[is.na(summ_t_strain)] <- 0
+
+kable_classic(kable(summ_t_strain[head(order(summ_t_strain[,7], decreasing = T), n=10),], 
+                    row.names = F,
+                    caption = "Top 15 experiments containing the most samples in the final, filtered compendium"))
+
+```
+
+```{r}
+
+# must meet all PAO1-based criteria
+pao1_t <- table(ann_exp_groups[
+                                 (filt_sp_comp_pao1_tpm 
+                                  & filt_hk_comp_pao1_tpm) |
+                                   (filt_sp_comp_pa14_tpm 
+                                  & filt_hk_comp_pa14_tpm)])
+
+pao1_only <- table(ann_exp_groups[
+                                 (filt_sp_comp_pao1_tpm 
+                                  & filt_hk_comp_pao1_tpm) &
+                                   !(filt_sp_comp_pa14_tpm 
+                                  & filt_hk_comp_pa14_tpm) ])
+pa14_only <- table(ann_exp_groups[
+                                 (filt_sp_comp_pa14_tpm 
+                                  & filt_hk_comp_pa14_tpm) &
+                                   !(filt_sp_comp_pao1_tpm 
+                                  & filt_hk_comp_pao1_tpm)])
+
+pao1_both <- table(ann_exp_groups[
+                                 (filt_sp_comp_pao1_tpm 
+                                  & filt_hk_comp_pao1_tpm) &
+                                   (filt_sp_comp_pa14_tpm 
+                                  & filt_hk_comp_pa14_tpm)])
+
+
+
+all_t <- table(ann_exp_groups)
+
+ugs <- unique(names(pao1_t))
+
+summ_t <- data.frame('Experiment' = ugs, 
+                     'passed_PAO1' = as.numeric(pao1_only[ugs]),
+                     'passed_PA14' = as.numeric(pa14_only[ugs]),
+                     'passed_crit' = as.numeric(pao1_t[ugs]))
+
+
+ann_exp_groups[is.na(ann_exp_groups)] <- "No group"
+all_t_s <- data.frame('groups' = ann_exp_groups,
+                          'strain' = seq_strain_order)
+rownames(all_t_s) <- make.unique(as.character(all_t_s$groups))
+
+summ_t_strain <- data.frame('Experiment' = ugs,
+                            'Strain' = all_t_s[ugs,'strain'], 
+                            #'Description' = rep("",length(all_t_s[ugs,'strain'])), 
+                            #'Notes' = rep("",length(all_t_s[ugs,'strain'])), 
+                             'passed PAO1' = as.numeric(pao1_only[ugs]),
+                            'passed PA14' = as.numeric(pa14_only[ugs]),
+                            'passed both' = as.numeric(pao1_both[ugs]),
+                            'total passed' = as.numeric(pao1_t[ugs]),
+                            'failed' = as.numeric(all_t[ugs]) - as.numeric(pao1_t[ugs]))
+
+summ_t_strain[is.na(summ_t_strain)] <- 0
+
+kable_classic(kable(summ_t_strain[head(order(summ_t_strain[,6], decreasing = T), n=15),], 
+                    row.names = F,
+                    caption = "Top 15 experiments containing the most samples in the final, filtered compendium"))
+
+
+```
+
+## 8. Write out filter criteria values
+
+```{r}
+pao1_acc_meds <- apply(normalized_counts_pao1[acc_genes$PAO1_Locus_Tag[
+  acc_genes$PAO1_Locus_Tag %in% rownames(normalized_counts_pao1)],], 2, 
+  function(x) median(x))
+
+pa14_acc_meds <- apply(normalized_counts_pa14[acc_genes$PA14_Locus_Tag[
+  acc_genes$PA14_Locus_Tag %in% rownames(normalized_counts_pa14)],], 2, 
+  function(x) median(x))
+```
+
+```{r}
+
+filter_criteria_out_df <- data.frame(
+  'sample' = names(pao1_seq_zeros),
+  'study' = ann_exp_groups[names(pao1_seq_zeros)],
+  'pao1_hk_median' = hk_means_pao1[names(pao1_seq_zeros)],
+  'pa14_hk_median' = hk_means_pa14[names(pao1_seq_zeros)],
+  'pao1_zeros' = pao1_seq_zeros[names(pao1_seq_zeros)],
+  'pa14_zeros' = pa14_seq_zeros[names(pao1_seq_zeros)],
+  'pao1_accesory_genes_median' = pao1_acc_meds[names(pao1_seq_zeros)],
+  'pa14_accessory_genes_median' = pa14_acc_meds[names(pao1_seq_zeros)],
+  'annotated_strain' = seq_strain_ann_order[names(pao1_seq_zeros)])
+
+filter_criteria_out_df$sample <- sapply(filter_criteria_out_df$sample, 
+                                        function(x) substr(x,1,regexpr('\\.',x)[1]-1))
+
+write.csv(filter_criteria_out_df,'filteria_criteria_values.csv', row.names = F)
+```
+
+```{r}
+anns_by_exp <- read.csv('Table2_anns_by_exp.csv', stringsAsFactors = F)
+
+filter_criteria_out_df <- data.frame(
+  'sample' = names(pao1_seq_zeros),
+  'study' = ann_exp_groups[names(pao1_seq_zeros)],
+  'pao1_hk_median' = hk_means_pao1[names(pao1_seq_zeros)],
+  'pa14_hk_median' = hk_means_pa14[names(pao1_seq_zeros)],
+  'pao1_zeros' = pao1_seq_zeros[names(pao1_seq_zeros)],
+  'pa14_zeros' = pa14_seq_zeros[names(pao1_seq_zeros)],
+  'pao1_accesory_genes_median' = pao1_acc_meds[names(pao1_seq_zeros)],
+  'pa14_accessory_genes_median' = pa14_acc_meds[names(pao1_seq_zeros)],
+  'annotated_strain' = seq_strain_ann_order[names(pao1_seq_zeros)])
+
+filter_criteria_out_df$SRX_ID <- sapply(filter_criteria_out_df$sample, 
+                                        function(x) substr(x,1,regexpr('\\.',x)[1]-1))
+out_with_anns <- merge(filter_criteria_out_df, anns_by_exp, by = 'SRX_ID')
+
+out_with_anns$anns_combined <- sapply(c(1:nrow(out_with_anns)), function(x){
+  if(out_with_anns$annotated_strain[x] == "No annotation"){
+    out_with_anns$Strain[x]
+  } 
+  if(is.na(out_with_anns$Strain[x])){
+    out_with_anns$annotated_strain[x]
+  } else{out_with_anns$Strain[x]}
+})
+
+write.csv(out_with_anns,'filteria_criteria_values_with_exp_anns.csv', row.names = F)
+```
+
