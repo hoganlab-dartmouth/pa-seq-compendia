@@ -45,8 +45,8 @@ Iterate between the following scripts until all samples have sucessfully run
 /collected_IDs_jobs.pbs
 
 Check that all samples have been processed
-find comp/ -mexdepth 2 -mindepth 2 | cat | wc -l
-find /dartfs-hpc/scratch/f002bx6/salmon/pa14_cdna/comp -name "*.sf" | wc -l
+find sra_comp/ -maxdepth 2 -mindepth 2 | cat | wc -l
+find /dartfs-hpc/scratch/f002bx6/salmon/pa14_cdna/sra_comp -name "*.sf" | wc -l
 
 
 5. Collect salmon output and log data
