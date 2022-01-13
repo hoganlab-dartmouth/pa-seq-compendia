@@ -68,7 +68,7 @@ get_hks <- function(data, hk_genes, lt=.2,ut=.98){
   # lt: the percentile used to determine lower bounf
   # ut: the percentile used to determine upper bound
   # returns: vector of lower and upper bounds in that order
-  quantile(apply(data[hks_genes,], 
+  quantile(apply(data[hk_genes,], 
                  2, FUN = function(x) median(x)), probs = c(lt,ut))
 }
 
