@@ -34,7 +34,7 @@ In order to ensure the quality of the compendium, we need to impose some heurist
 library(kableExtra)
 source('annotation_functions.R')
 source('filter_functions.R')
-source('plotting_functions.R')
+source('qc-dev/plotting_functions.R')
 ```
 
 
@@ -143,10 +143,10 @@ pa14_zeros <- get_zeros(
 # median hk expression lower and upper thresholds
 pao1_hk <- get_hks(
   rnaseq_pao1_tpm_log[,seq_strain_ann_order == 'PAO1'], 
-  hks_pao1, .2, .98)
+  hks_pao1, .2, .98) #.025,.975 #.2, .98
 pa14_hk <- get_hks(
   rnaseq_pa14_tpm_log[,seq_strain_ann_order == 'PA14'], 
-  hks_pa14, .2,.98)
+  hks_pa14, .2, .98)
 ```
 
 
@@ -156,7 +156,7 @@ Now that upper and lower thresholds have been determined, we can apply these cri
 
 ```{r}
 ## PAO1
-filt_sp_pao1 <- filter_sparsity(rnaseq_pao1_tpm_log,
+filt_sp_pao1 <- filter_sparsity(rnaseq_pao1_counts,
                                 max_zeros=pao1_zeros[2],
                                 min_zeros=pao1_zeros[1])
 filt_hk_pao1 <- filter_hks(rnaseq_pao1_tpm_log, hks_pao1,
@@ -164,18 +164,18 @@ filt_hk_pao1 <- filter_hks(rnaseq_pao1_tpm_log, hks_pao1,
                            hk_max=pao1_hk[2])
 filt_pao1_samp_i <- (filt_sp_pao1 & filt_hk_pao1)
 ## PA14
-filt_sp_pa14 <- filter_sparsity(rnaseq_pa14_tpm_log,
-                                max_zeros=pao1_zeros[2],
+filt_sp_pa14 <- filter_sparsity(rnaseq_pa14_counts,
+                                max_zeros=pa14_zeros[2],
                                 min_zeros=pa14_zeros[1])
 filt_hk_pa14 <- filter_hks(rnaseq_pa14_tpm_log, hks_pa14,
                            hk_min=pa14_hk[1],
                            hk_max=pa14_hk[2])
-filt_pa14_samp_i <- (filt_sp_comp_pa14_tpm & filt_hk_comp_pa14_tpm)
+filt_pa14_samp_i <- (filt_sp_pa14 & filt_hk_pa14)
 # consolidate to include samples that pass PAO1 or PA14 based criteria
 filt_i <- filt_pao1_samp_i | filt_pa14_samp_i
 ```
 
-For the final compendia we will keep samples that passed either both PAO1 zero- and hk-based criteria or both PA14 zero- and hk-based criteria. In this way the PAO1 and PA14 comepndia will contain the exact same set of samples, just aligned to difference references.
+For the final compendia we will keep samples that passed either both PAO1 zero- and hk-based criteria or both PA14 zero- and hk-based criteria. In this way the PAO1 and PA14 compendia will contain the exact same set of samples, just aligned to difference references.
 
 ```{r}
 ## PAO1
@@ -271,9 +271,9 @@ The samples in the compendium have different numbers of genes with zero counts, 
 #pdf("hk_genes_pao1_pa14_w_cutoffs.pdf", width=6,height=6)
 par(mfrow=c(2,2))
 hk_means_pao1 <- apply(rnaseq_pao1_tpm_log[hks_pao1,], 2, 
-                       FUN = function(x) mean(x))
+                       FUN = function(x) median(x))
 hk_means_pa14 <- apply(rnaseq_pa14_tpm_log[hks_pa14,], 2, 
-                       FUN = function(x) mean(x))
+                       FUN = function(x) median(x))
 hist(hk_means_pao1[seq_strain_ann_order == 'PAO1'], 
      main = 'PAO1-aligned\n PAO1 samples', xlab = 'median HK expression')
 abline(v = pao1_hk[1], col='red', lty=2)
@@ -307,7 +307,7 @@ co_df <- data.frame('PAO1_zeros_count' = pao1_seq_zeros,
                     'PA14_zeros_count' = pa14_seq_zeros,
                     'PAO1_hk_median' = hk_means_pao1 ,
                     'PA14_hk_median' = hk_means_pa14 ,
-                    'strain' = seq_strain_order,
+                    'strain' = seq_strain_ann_order,
                     'Experiment' = names(hk_means_pao1))
 #write.csv(co_df,'cutoff_stats.csv')
 ```
@@ -317,30 +317,43 @@ co_df <- data.frame('PAO1_zeros_count' = pao1_seq_zeros,
 Before we go, let's take a quick look at the experiments that make up the compendium after filtering and the experiments that were filtered out.
 
 ```{r}
+ann_exp_groups <- sapply(colnames(rnaseq_pao1_tpm_log), function(x){
+  exp <- if(substr(x,1,regexpr('\\.',x)[1]-1) %in% run_table$Experiment){
+    run_table$SRA_study[ run_table$Experiment == substr(x,1,regexpr('\\.',x)[1]-1)]
+  }   else{
+    "No group"
+  }
+  exp[1]
+  }
+)
+ann_exp_groups[is.na(ann_exp_groups)] <- "No group"
+```
+
+```{r}
 
 # must meet all PAO1-based  or all PA14-based criteria
 pao1_t <- table(ann_exp_groups[
-                                 (filt_sp_comp_pao1_tpm 
-                                  & filt_hk_comp_pao1_tpm) |
-                                   (filt_sp_comp_pa14_tpm 
-                                  & filt_hk_comp_pa14_tpm)])
+                                 (filt_sp_pao1 
+                                  & filt_hk_pao1) |
+                                   (filt_sp_pa14 
+                                  & filt_hk_pa14)])
 
 pao1_only <- table(ann_exp_groups[
-                                 (filt_sp_comp_pao1_tpm 
-                                  & filt_hk_comp_pao1_tpm) &
-                                   !(filt_sp_comp_pa14_tpm 
-                                  & filt_hk_comp_pa14_tpm) ])
+                                 (filt_sp_pao1 
+                                  & filt_hk_pao1) &
+                                   !(filt_sp_pa14 
+                                  & filt_hk_pa14) ])
 pa14_only <- table(ann_exp_groups[
-                                 (filt_sp_comp_pa14_tpm 
-                                  & filt_hk_comp_pa14_tpm) &
-                                   !(filt_sp_comp_pao1_tpm 
-                                  & filt_hk_comp_pao1_tpm)])
+                                 (filt_sp_pa14 
+                                  & filt_hk_pa14) &
+                                   !(filt_sp_pao1 
+                                  & filt_hk_pao1)])
 
 pao1_both <- table(ann_exp_groups[
-                                 (filt_sp_comp_pao1_tpm 
-                                  & filt_hk_comp_pao1_tpm) &
-                                   (filt_sp_comp_pa14_tpm 
-                                  & filt_hk_comp_pa14_tpm)])
+                                 (filt_sp_pao1 
+                                  & filt_hk_pao1) &
+                                   (filt_sp_pa14 
+                                  & filt_hk_pa14)])
 
 
 
@@ -354,9 +367,9 @@ summ_t <- data.frame('Experiment' = ugs,
                      'passed_crit' = as.numeric(pao1_t[ugs]))
 
 
-ann_exp_groups[is.na(ann_exp_groups)] <- "No group"
+
 all_t_s <- data.frame('groups' = ann_exp_groups,
-                          'strain' = seq_strain_order)
+                          'strain' = seq_strain_ann_order)
 rownames(all_t_s) <- make.unique(as.character(all_t_s$groups))
 
 pao1_t <- pao1_t[ugs]
@@ -392,3 +405,102 @@ kable_classic(kable(summ_t_strain[head(order(summ_t_strain[,7], decreasing = T),
 ```
 
 Of the samples that gpt filtered out, some were entire experiments such as a single-cell experiment [SRP161626](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE119888) or P. aeruginosa co-cultured with A. fumigatus [SRP168376](https://metadataplus.biothings.io/geo/GSE122391), which suggest the techinical specifics of the experimentla design may be somewhat unique compared to the bulk of rnas-seq experiments in the compendium. In other cases, such as 17 of the `r 17+122` transcription factor mutants did not pass [SRP034661](https://www.ncbi.nlm.nih.gov//bioproject/PRJNA231236) which may promote more investigation into our cut-off threshold since it is splitting up samples from the same experiment which likely were processed together.
+
+#### Summary of filtering of clinical isolates
+
+```{r}
+# search for clinical oslates
+seq_strain_ann_CI <- rowSums(apply(run_table, 2, FUN = function(x){
+  sapply(x, function(y){
+    grepl('Clinical Isolate',y) | grepl('clinical isolate',y)
+  })
+})) > 0
+
+# consolidate PAO11 and PA14 annotations
+seq_strain_ann_CI <- sapply(c(1:nrow(run_table)), function(x){
+  if(seq_strain_ann_pao1[x]){
+    'PAO1'
+  } else if(seq_strain_ann_pa14[x]){
+    'PA14'
+  } else if(seq_strain_ann_CI[x]){
+    'Clinical isolate'
+  } else{'No annotation'}
+})
+# name the strain annotations to match compendium for easy indexing
+names(seq_strain_ann_CI) <- paste(run_table$Experiment,
+                               run_table$Experiment,'salmon',sep='.')
+# re-order strain annotations  to path compendium samples
+seq_strain_ann_order_CI <- seq_strain_ann_CI[colnames(rnaseq_pao1_tpm)]
+```
+
+```{r}
+
+# must meet all PAO1-based  or all PA14-based criteria
+pao1_t <- table(seq_strain_ann_order_CI[
+                                 (filt_sp_pao1 
+                                  & filt_hk_pao1) |
+                                   (filt_sp_pa14 
+                                  & filt_hk_pa14)])
+
+pao1_only <- table(seq_strain_ann_order_CI[
+                                 (filt_sp_pao1 
+                                  & filt_hk_pao1) &
+                                   !(filt_sp_pa14 
+                                  & filt_hk_pa14) ])
+pa14_only <- table(seq_strain_ann_order_CI[
+                                 (filt_sp_pa14 
+                                  & filt_hk_pa14) &
+                                   !(filt_sp_pao1 
+                                  & filt_hk_pao1)])
+
+pao1_both <- table(seq_strain_ann_order_CI[
+                                 (filt_sp_pao1 
+                                  & filt_hk_pao1) &
+                                   (filt_sp_pa14 
+                                  & filt_hk_pa14)])
+
+
+
+all_t <- table(seq_strain_ann_order_CI)
+
+ugs <- unique(names(all_t))
+
+summ_t <- data.frame(#'Experiment' = ugs, 
+                     'passed_PAO1' = as.numeric(pao1_only[ugs]),
+                     'passed_PA14' = as.numeric(pa14_only[ugs]),
+                     'passed_crit' = as.numeric(pao1_t[ugs]))
+
+
+
+all_t_s <- data.frame(#'groups' = ann_exp_groups,
+                          'strain' = seq_strain_ann_order_CI)
+rownames(all_t_s) <- make.unique(as.character(all_t_s$strain))
+
+pao1_t <- pao1_t[ugs]
+all_t <- all_t[ugs]
+pao1_t[is.na(pao1_t)] <- 0
+all_t[is.na(all_t)] <- 0
+
+summ_t_strain <- data.frame(#'Experiment' = ugs,
+                            'Strain' = all_t_s[ugs,'strain'], 
+                             'passed PAO1' = as.numeric(pao1_only[ugs]),
+                            'passed PA14' = as.numeric(pa14_only[ugs]),
+                            'passed both' = as.numeric(pao1_both[ugs]),
+                            'total passed' = as.numeric(pao1_t),
+                            'failed' = as.numeric(all_t) - as.numeric(pao1_t))
+
+summ_t_strain[is.na(summ_t_strain)] <- 0
+
+```
+
+```{r}
+kable_classic(kable(summ_t_strain[head(order(summ_t_strain[,5], decreasing = T), 
+                                       n=15),], 
+                    row.names = F,
+                    caption = "Top 15 experiments containing the most samples in the final, filtered compendium"))
+```
+
+```{r}
+anns_by_exp <- read.csv()
+```
+

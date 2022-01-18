@@ -2,6 +2,8 @@
 title: "Plots for the compendium paper"
 output: html_notebook
 author: Georgia Doing
+
+
 date: Sept 28, 2021
 ---
 
@@ -35,7 +37,10 @@ This figure illustrates the salmon mapping parameters that worked bets for mappi
 
 This data was from Jake's rotation repo [sraProcessingPipeline](https://github.com/hoganlab-dartmouth/sraProcessingPipeline) .
 ```{r}
-sal_clc_data <- read.csv('../salmon_params/salmon_clc_df.csv', stringsAsFactors = F,
+
+sal_clc_data <- read.csv('../salmon_params/salmon_clc_df.csv', 
+                         stringsAsFactors = F,
+
                          row.names=1)
 ```
 
@@ -75,51 +80,402 @@ sal_clc_data_melt$paired <- sapply(sal_clc_data_melt$variable, function(x){
       'unpaired'}
   })
 # separate the data by method and parameter
-clc_melt <- melt(cbind('gene'=rownames(sal_clc_data),sal_clc_data[,1:4]), value.name = 'CLC')
-sal1_melt <- melt(cbind('gene'=rownames(sal_clc_data),sal_clc_data[,5:8]), value.name = 'SALMON-unpaired')
-sal2_melt <- melt(cbind('gene'=rownames(sal_clc_data),sal_clc_data[,9:12]), value.name = 'SALMON-paired')
+
+clc_melt <- melt(cbind('gene'=rownames(sal_clc_data),sal_clc_data[,1:4]), 
+                 value.name = 'CLC')
+sal1_melt <- melt(cbind('gene'=rownames(sal_clc_data),sal_clc_data[,5:8]), 
+                  value.name = 'SALMON-unpaired')
+sal2_melt <- melt(cbind('gene'=rownames(sal_clc_data),sal_clc_data[,9:12]), 
+                  value.name = 'SALMON-paired')
+
 
 # recombine data so paired and unpaired are both matched to CLC values
 clc_data_agg <- cbind(clc_melt, 'SALMONunpaired'=sal1_melt[,3], 'SALMONpaired'=sal2_melt[,3])
 
-# plot in ggplot2 and include linear model fit stats
+
+# plot in ggplot2
 my.formula <- y ~ x
 g <- ggplot(clc_data_agg[clc_data_agg$CLC > 0 & 
                            clc_data_agg$SALMONunpaired > 0 & 
-                           clc_data_agg$SALMONpaired > 0,]) +
-  geom_point(aes(y=CLC, x=SALMONunpaired), color = '#C6A9B5') + #, shape=variable
-  geom_point(aes(y=CLC, x=SALMONpaired), color='#895881') + #, shape=variable
-  geom_text(x=3.75, hjust=0,y = 1.5, label = 'PAIRED', color='#C6A9B5', size=3.5) +
-  geom_text(x=3.75, hjust=0,y = 1.2, label = 'UNPAIRED', color='#895881', size=3.5) +
-  #geom_smooth(aes(y=clc_a, x=s_a_1),method=lm, se=F, fullrange=T, linetype=2, color='orange') +
-  #geom_smooth(aes(y=clc_a, x=s_a_2),method=lm, se=F, fullrange=T, linetype=2, color='grey') +
-  stat_poly_eq(aes(y=CLC, x=SALMONunpaired,label = paste(..eq.label.., sep = "~~~")), 
-               label.x.npc = "left", label.y.npc = 1,
-               eq.x.rhs = "~italic(x)", coef.digits = 2, color='#895881',
-               formula = my.formula, parse = TRUE, size = 3.5) +
-  stat_poly_eq(aes(y=CLC, x=SALMONunpaired,label = paste(..rr.label.., sep = "~~~")), 
-               label.x.npc = "left", label.y.npc = 0.95,coef.digits = 2,color='#895881',
-               formula = my.formula, parse = TRUE, size = 3.5) + 
-  
-  stat_poly_eq(aes(y=CLC, x=SALMONpaired,label = paste(..eq.label.., sep = "~~~")), 
-               label.x.npc = "left", label.y.npc = .85,
-               eq.x.rhs = "~italic(x)", coef.digits = 2, color='#C6A9B5',
-               formula = my.formula, parse = TRUE, size = 3.5) +
-  stat_poly_eq(aes(y=CLC, x=SALMONpaired,label = paste(..rr.label.., sep = "~~~")), 
-               label.x.npc = "left", label.y.npc = 0.8,coef.digits = 2, color='#C6A9B5',
-               formula = my.formula, parse = TRUE, size = 3.5) + 
-  xlab('SALMON log(TPM)') + ylab('CLC log(TPM)') +
-  scale_shape_discrete(guide='none') +
-  theme_prism(base_fontface = 'plain', base_line_size = 0.5) +
+                           clc_data_agg$SALMONpaired > 0 & 
+                           clc_data_agg$variable == 'clc_a',]) +
+  geom_point(aes(y=CLC, x=SALMONunpaired), color = '#C6A9B5', alpha = 0.25) + 
+  geom_point(aes(y=CLC, x=SALMONpaired), color='#895881', alpha = 0.25) + 
+
+  xlab('Salmon log TPM') + ylab('CLC log TPM') +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) #+
   #facet_wrap(~variable)+
   #theme_bw() +
   #theme_pubr() +
-  ggsave('clc_vs_sal_paired_unpaired.png', height=3, width=3)
+  
+g
+ggsave('clc_vs_sal_paired_unpaired_notxt_sm_clc_a_all_purple.png', 
+       height=1.7, width=1.7)
+```
+# Operons
+
+
+```{r}
+operons <- read.csv('~/Dropbox (Hogan Lab)/Resources/Regulons/operons_format.csv',
+                    stringsAsFactors = F)
+op_size <- sapply(clc_data_agg$gene, function(x){
+  pa <- PA14_to_PAO1(x)
+  size <- operons$Length[grep(pa,operons$Genes)]
+  if(length(size) > 0){size}else{0}
+})
+```
+
+```{r, fig.height=1.5, fig.width=1.5}
+clc_data_agg$op_size <- sapply(op_size, function(x) x[[1]])
+g <- ggplot(clc_data_agg[clc_data_agg$CLC > 0 & 
+                           clc_data_agg$SALMONunpaired > 0 & 
+                           clc_data_agg$SALMONpaired > 0 ,]) +
+  geom_point(
+             aes(y=CLC, x=SALMONpaired, line=op_size, alpha=op_size), 
+             color = '#D95F02', shape=21) + # orange
+
+      geom_point(
+             aes(y=CLC, x=SALMONunpaired, line=op_size, alpha=op_size), 
+             color = '#895881', shape=21) + # purple
+  scale_fill_gradient(low='blue',high='red', guide="none") +
+  scale_alpha(guide = 'none') +
+  xlab('Salmon log TPM') + ylab('CLC log TPM') +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) #+
+
+g
+ggsave('clc_vs_sal_paired_unpaired_notxt_sm_clc_a_all_genes_alpha_size.png', 
+         height=1.7, width=1.7)
+
+clc_data_agg$op_size <- sapply(op_size, function(x) x[[1]])
+g <- ggplot(clc_data_agg[clc_data_agg$CLC > 0 & 
+                           clc_data_agg$SALMONunpaired > 0 & 
+                           clc_data_agg$SALMONpaired > 0 ,]) +
+  geom_point(
+             aes(y=CLC, x=SALMONpaired, line=op_size), alpha=0.025, 
+             color = '#D95F02', shape=21) + # orange
+
+      geom_point(
+             aes(y=CLC, x=SALMONunpaired, line=op_size), alpha=0.025, 
+             color = '#895881', shape=21) + # purple
+  scale_fill_gradient(low='blue',high='red', guide="none") +
+  scale_alpha(guide = 'none') +
+  xlab('Salmon log TPM') + ylab('CLC log TPM') +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) #+
+
+g
+ggsave('clc_vs_sal_paired_unpaired_notxt_sm_clc_a_all_genes.png', 
+         height=1.7, width=1.7)
+```
+
+```{r, fig.height=1.5, fig.width=1.5}
+clc_data_agg$op_size <- sapply(op_size, function(x) x[[1]])
+g <- ggplot(clc_data_agg[clc_data_agg$CLC > 0 & 
+                           clc_data_agg$SALMONunpaired > 0 & 
+                           clc_data_agg$SALMONpaired > 0 &
+                           clc_data_agg$op_size > 4,]) +
+  geom_point(
+             aes(y=CLC, x=SALMONpaired,  alpha=op_size), color = '#D95F02', 
+             shape=21) + #, shape=variable
+
+      geom_point(
+             aes(y=CLC, x=SALMONunpaired,  alpha=op_size), color = '#895881', 
+             shape=21) +
+  scale_fill_gradient(low='blue',high='red', guide="none") +
+  scale_alpha(guide = 'none') +
+  xlab('Salmon log TPM') + ylab('CLC log TPM') +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) #+
+
+g
+ggsave('clc_vs_sal_paired_unpaired_notxt_sm_clc_a_largeops4.png', height=1.7, width=1.7)
+
+clc_data_agg$op_size <- sapply(op_size, function(x) x[[1]])
+g <- ggplot(clc_data_agg[clc_data_agg$CLC > 0 & 
+                           clc_data_agg$SALMONunpaired > 0 & 
+                           clc_data_agg$SALMONpaired > 0 &
+                           clc_data_agg$op_size > 8,]) +
+  geom_point(
+             aes(y=CLC, x=SALMONpaired,  alpha=op_size), color = '#D95F02', 
+             shape=21) + #, shape=variable
+
+      geom_point(
+             aes(y=CLC, x=SALMONunpaired,  alpha=op_size), color = '#895881', 
+             shape=21) +
+  scale_fill_gradient(low='blue',high='red', guide="none") +
+  scale_alpha(guide = 'none') +
+  xlab('Salmon log TPM') + ylab('CLC log TPM') +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) #+
+
+g
+ggsave('clc_vs_sal_paired_unpaired_notxt_sm_clc_a_largeops8.png', height=1.7, width=1.7)
+```
+
+```{r, fig.height=1.5, fig.width=1.5}
+clc_data_agg$op_size <- sapply(op_size, function(x) x[[1]])
+g <- ggplot(clc_data_agg[clc_data_agg$CLC > 0 & 
+                           clc_data_agg$SALMONunpaired > 0 & 
+                           clc_data_agg$SALMONpaired > 0 &
+                           clc_data_agg$op_size == 1,]) +
+  #geom_point(aes(y=CLC, x=SALMONpaired, color=op_size), fill = '#C6A9B5', alpha = 0.25) + #, shape=variable
+  geom_point(
+             aes(y=CLC, x=SALMONpaired,  alpha=op_size), color = '#D95F02', shape=21, alpha=0.0625) + #, shape=variable
+
+      geom_point(
+             aes(y=CLC, x=SALMONunpaired,  alpha=op_size), color = '#895881', shape=21, alpha=0.0625) +
+
+  #geom_point(aes(y=CLC, x=SALMONunpaired, color=op_size), alpha = 0.25) + #, shape=variable color='#895881'
+  scale_fill_gradient(low='blue',high='red', guide="none") +
+
+  xlab('Salmon log TPM') + ylab('CLC log TPM') +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) #+
+  
+g
+ggsave('clc_vs_sal_paired_unpaired_notxt_sm_clc_a_mono_ops.png', height=1.7, width=1.7)
+```
+
+Print out the linear model fit stats as well in order to include in text or table.
+
+```{r}
+print("mono (u/p)")
+unpaired_fit <- summary(lm(CLC ~ SALMONunpaired, data = clc_data_agg[clc_data_agg$op_size == 1,]))
+paired_fit <- summary(lm(CLC ~ SALMONpaired, data = clc_data_agg[clc_data_agg$op_size == 1,]))
+
+
+unpaired_fit$adj.r.squared
+paired_fit$adj.r.squared
+
+print("non mono (u/p)")
+unpaired_fit <- summary(lm(CLC ~ SALMONunpaired, data = clc_data_agg[clc_data_agg$op_size > 1,]))
+paired_fit <- summary(lm(CLC ~ SALMONpaired, data = clc_data_agg[clc_data_agg$op_size > 1,]))
+
+
+unpaired_fit$adj.r.squared
+paired_fit$adj.r.squared
+
+print("g 1 l 9 (u/p)")
+unpaired_fit <- summary(lm(CLC ~ SALMONunpaired, data = clc_data_agg[clc_data_agg$op_size > 1 & clc_data_agg$op_size < 9,]))
+paired_fit <- summary(lm(CLC ~ SALMONpaired, data = clc_data_agg[clc_data_agg$op_size > 1 & clc_data_agg$op_size < 9,]))
+
+unpaired_fit$adj.r.squared
+paired_fit$adj.r.squared
+
+print("g8 (u/p)")
+unpaired_fit <- summary(lm(CLC ~ SALMONunpaired, data = clc_data_agg[clc_data_agg$op_size > 8,]))
+paired_fit <- summary(lm(CLC ~ SALMONpaired, data = clc_data_agg[clc_data_agg$op_size > 8,]))
+
+unpaired_fit$adj.r.squared
+paired_fit$adj.r.squared
+
+
+
+print("all (u/p)")
+unpaired_fit <- summary(lm(CLC ~ SALMONunpaired, data = clc_data_agg))
+paired_fit <- summary(lm(CLC ~ SALMONpaired, data = clc_data_agg))
+
+unpaired_fit$adj.r.squared
+paired_fit$adj.r.squared
+
+
+```
+
+```{r}
+res_df <- data.frame('residuals' = c(paired_fit$residuals,unpaired_fit$residuals),
+                     'param' = rep(c('paired','unpaired'), each = nrow(clc_data_agg)),
+                     'op_size' = factor(sapply(clc_data_agg$op_size, 
+                                        function(x) if(x > 8){'Large (> 8)'}
+                                        else if(x == 1){'Small (< 9)'}
+                                        else{'Small (< 9)'} ), levels = c('Monocistronic','Medium','Polycistronic','Small (< 9)','Large (> 8)'))
+)
+
+df_groups <- res_df %>% 
+  rstatix::group_by(op_size, param) %>% 
+summarize(mean_size = median(abs(residuals), na.rm = TRUE))
+
+  
+df_p_val <- res_df %>% 
+  rstatix::group_by(op_size) %>% 
+  rstatix::t_test(residuals ~ param) %>% 
+  rstatix::adjust_pvalue(p.col = "p", method = "bonferroni") %>%
+  rstatix::add_significance(p.col = "p.adj") %>% 
+  rstatix::add_xy_position(x = "param")
+
+g <- ggplot(res_df, aes(color=as.factor(op_size),y=abs(residuals), x = param)) +
+  geom_jitter(position=position_jitterdodge(jitter.width=.25), alpha=.25) +
+  geom_boxplot(notch=T, outlier.shape = NA) +
+  
+  scale_color_manual(values=c('Polycistronic' = '#D95F02', 'Monocistronic' = '#895881',
+                              'Large (> 8)' = '#D95F02', 'Small (< 9)' = '#895881', 'Medium' = '#C2A5CF'))+
+  facet_wrap(~ op_size, scales='free') +
+  ylab('residuals') + xlab('') +
+  add_pvalue(df_p_val, xmin = "xmin",  xmax = "xmax",label = "p.adj.signif", tip.length = .05, color = 'black') +
+
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) 
+
+g
+ggsave('paired_v_unpaired_operonsnLvS.png', height=1.7, width=3.5)
+```
+
+```{r}
+res_df <- data.frame('residuals' = c(paired_fit$residuals,unpaired_fit$residuals),
+                     'param' = rep(c('paired','unpaired'), each = nrow(clc_data_agg)),
+                     'op_size' = factor(sapply(clc_data_agg$op_size, 
+                                        function(x) if(x > 8){'Large (> 8)'}
+                                        else if(x == 1){'Small (< 9)'}
+                                        else{'Small (< 9)'} ), levels = c('Monocistronic','Medium','Polycistronic','Small (< 9)','Large (> 8)'))
+)
+
+df_p_val <- res_df %>% 
+  rstatix::group_by(op_size) %>% 
+  rstatix::t_test(residuals ~ param) %>% 
+  rstatix::adjust_pvalue(p.col = "p", method = "bonferroni") %>%
+  rstatix::add_significance(p.col = "p.adj") %>% 
+  rstatix::add_xy_position(x = "param")
+
+g <- ggplot(res_df, aes(color=as.factor(op_size),y=abs(residuals), x = param)) +
+  geom_jitter(position=position_jitterdodge(jitter.width=.25), alpha=.25) +
+  geom_boxplot(notch=T, outlier.shape = NA) +
+  
+  scale_color_manual(values=c('Polycistronic' = '#D95F02', 'Monocistronic' = '#895881',
+                              'Large (> 8)' = '#D95F02', 'Small (< 9)' = '#895881', 'Medium' = '#C2A5CF'))+
+  facet_wrap(~ op_size, scales='free') +
+  ylab('residuals') + xlab('') +
+  add_pvalue(df_p_val, xmin = "xmin",  xmax = "xmax",label = "p.adj.signif", tip.length = .05, color = 'black') +
+
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) +
+  ggsave('paired_v_unpaired_operonsnLvS.png', height=1.7, width=3.5)
+g
+```
+
+```{r}
+res_df <- data.frame('residuals' = c(paired_fit$residuals,unpaired_fit$residuals),
+                     'param' = rep(c('paired','unpaired'), each = nrow(clc_data_agg)),
+                     'op_size' = factor(sapply(clc_data_agg$op_size, 
+                                        function(x) if(x > 8){'Large Operons'}
+                                        else if(x == 1){'Monocistronic'}
+                                        else{'Small Operons'} ), levels = c('Monocistronic','Medium','Polycistronic','Small Operons','Large Operons'))
+)
+
+df_p_val <- res_df %>% 
+  rstatix::group_by(op_size) %>% 
+  rstatix::t_test(residuals ~ param) %>% 
+  rstatix::adjust_pvalue(p.col = "p", method = "bonferroni") %>%
+  rstatix::add_significance(p.col = "p.adj") %>% 
+  rstatix::add_xy_position(x = "param")
+
+g <- ggplot(res_df, aes(color=as.factor(op_size),y=abs(residuals), x = param)) +
+  geom_jitter(position=position_jitterdodge(jitter.width=.25), alpha=.25) +
+  geom_boxplot(notch=T, outlier.shape = NA) +
+  
+  scale_color_manual(values=c('Polycistronic' = '#D95F02', 'Monocistronic' = '#895881',
+                              'Large Operons' = '#D95F02', 'Small Operons' = '#895881', 'Medium' = '#C2A5CF'), guide=F)+
+  facet_wrap(~ op_size, scales='free') +
+  ylab('residuals') + xlab('') +
+  add_pvalue(df_p_val, xmin = "xmin",  xmax = "xmax",label = "p.adj.signif", tip.length = .05, color = 'black') +
+
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) +
+  ggsave('paired_v_unpaired_operonsn1v8threestep.png', height=1.7, width=4)
 g
 ```
 
 
-Print out the lienar model fit stats as well in order to include in text or table.
+```{r}
+res_df <- data.frame('residuals' = c(paired_fit$residuals,unpaired_fit$residuals),
+                     'param' = rep(c('paired','unpaired'), each = nrow(clc_data_agg)),
+                     'op_size' = factor(sapply(clc_data_agg$op_size, 
+                                        function(x) if(x > 8){'Large Operons'}
+                                        else if(x == 1){'Monocistronic'}
+                                        else{'Small Operons'} ), levels = c('Monocistronic','Medium','Polycistronic','Small Operons','Large Operons'))
+)
+
+df_p_val <- res_df %>% 
+  rstatix::group_by(op_size) %>% 
+  rstatix::t_test(residuals ~ param) %>% 
+  rstatix::adjust_pvalue(p.col = "p", method = "bonferroni") %>%
+  rstatix::add_significance(p.col = "p.adj") %>% 
+  rstatix::add_xy_position(x = "param")
+
+g <- ggplot(res_df, aes(color=as.factor(op_size),y=abs(residuals), x = param)) +
+  geom_jitter(position=position_jitterdodge(jitter.width=.25), alpha=.25) +
+  geom_boxplot(notch=T, outlier.shape = NA, varwidth=F) +
+  
+  scale_color_manual(values=c('Polycistronic' = '#D95F02', 'Monocistronic' = '#895881',
+                              'Large Operons' = '#D95F02', 'Small Operons' = '#895881', 'Medium' = '#C2A5CF'), guide=F)+
+  facet_wrap(~ op_size) + #, scales='free'
+  ylab('residuals') + xlab('') +
+  add_pvalue(df_p_val, xmin = "xmin",  xmax = "xmax",label = "p.adj.signif", tip.length = .0175, color = 'black', y.position=0.45) +
+scale_y_break(c(0.5,3.2)) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) +
+  ggsave('paired_v_unpaired_operonsn1v8fixed_break.png', height=4, width=6)
+g
+```
+
+
+```{r}
+res_df <- data.frame('residuals' = c(paired_fit$residuals,unpaired_fit$residuals),
+                     'param' = rep(c('paired','unpaired'), each = nrow(clc_data_agg)),
+                     'op_size' = factor(sapply(clc_data_agg$op_size, 
+                                        function(x) if(x > 8){'Large Operons'}
+                                        else if(x == 1){'Monocistronic'}
+                                        else{'Small Operons'} ), levels = c('Monocistronic','Small Operons','Large Operons'))
+)
+
+df_p_val <- res_df %>% 
+  rstatix::group_by(param) %>% 
+  rstatix::t_test(residuals ~ op_size, ref.group = "Monocistronic", alternative = "less") %>% 
+  rstatix::adjust_pvalue(p.col = "p", method = "bonferroni") %>%
+  rstatix::add_significance(p.col = "p.adj") %>% 
+  rstatix::add_xy_position(x = "op_size")
+
+g <- ggplot(res_df, aes(x=op_size,y=abs(residuals),  color = op_size)) +
+  geom_jitter(position=position_jitterdodge(jitter.width=.25), alpha=.25) +
+  geom_boxplot(notch=T, outlier.shape = NA, varwidth=F, aes(color = param)) +
+  
+  scale_color_manual(values=c('Polycistronic' = '#D95F02', 'Monocistronic' = '#895881',
+                              'Large Operons' = '#D95F02', 'Small Operons' = '#C2A5CF', 'Medium' = '#C2A5CF', 'paired' = '#D95F02','unpaired' = '#895881'), guide=F)+
+  facet_wrap(~ param, scales='free') + #, scales='free'
+  ylab('residuals') + xlab('') +
+  #add_pvalue(df_p_val, xmin = "xmin",  xmax = "xmax",label = "p", tip.length = .005, color = 'black', y.position = 0.4, step.increase=0.01) +
+scale_y_break(c(0.5,3)) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) +
+  ggsave('operonsVmono_paired_unpaired_n1v8fixed_break_nostats_skinny.png', height=3, width=3)
+g
+```
+
+
+
+
+
+
+
+
+
+```{r}
+res_df <- data.frame('residuals' = c(paired_fit$residuals,unpaired_fit$residuals),
+                     'param' = rep(c('paired','unpaired'), each = nrow(clc_data_agg)),
+                     'op_size' = clc_data_agg$op_size
+)
+
+df_p_val <- res_df %>% 
+  rstatix::group_by(op_size) %>% 
+  rstatix::t_test(residuals ~ param) %>% 
+  rstatix::adjust_pvalue(p.col = "p", method = "bonferroni") %>%
+  rstatix::add_significance(p.col = "p.adj") %>% 
+  rstatix::add_xy_position(x = "param")
+
+g <- ggplot(res_df, aes(color=as.factor(op_size),y=abs(residuals), x = param)) +
+  geom_jitter(position=position_jitterdodge(jitter.width=.25), alpha=.25) +
+  geom_boxplot(notch=T, outlier.shape = NA) +
+  
+  #scale_color_manual(values=c('Polycistronic' = '#D95F02', 'Monocistronic' = '#895881',
+   #                           'Large (> 8)' = '#D95F02', 'Small (< 9)' = '#895881', 'Medium' = '#C2A5CF'))+
+  facet_wrap(~ op_size, scales='free') +
+  ylab('residuals') + xlab('') +
+  add_pvalue(df_p_val, xmin = "xmin",  xmax = "xmax",label = "p.adj.signif", tip.length = .05, color = 'black') +
+
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) +
+  ggsave('paired_v_unpaired_operonsn_bysize.png', height=1.7, width=3.5)
+g
+```
+
 
 ```{r}
 unpaired_fit <- summary(lm(clc_a ~ s_a_1, data = sal_clc_data))
@@ -207,12 +563,14 @@ g <- ggplot(sal_clc_DE) +
   geom_vline(xintercept = 2, color = "#EF8B46", lty=2) + 
   geom_vline(xintercept = -2, color = "#EF8B46", lty=2) + 
   geom_hline(yintercept =-log(0.05), color = "#EF8B46", lty=2) + 
-  xlab('logFC') + ylab('-log(FDR)') + 
-  geom_text(x=-5.5, y = 14, label = 'CLC', color='#89A45E', size=6) +
-  geom_text(x=-4.0, y = 12, label = 'SALMON', color='#895881', size=6) +
-  theme_prism(base_fontface = 'plain', base_line_size = 0.5) +
+
+  xlab('log fold-change') + ylab('-log FDR') + 
+  #geom_text(x=-5.5, y = 14, label = 'CLC', color='#89A45E', size=6) +
+  #geom_text(x=-4.0, y = 12, label = 'SALMON', color='#895881', size=6) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5) #+
   #scale_color_manual(values = c('black','red'), labels = c('CLC','SALMON')) +
-  ggsave('clc_vs_sal_DE_volcano_pho_colored.png', height=3.4, width=3.4, units='in')
+  #ggsave('clc_vs_sal_DE_volcano_pho_colored_notxt.png', height=3, width=3, units='in')
+
 g
 ```
 
@@ -245,23 +603,26 @@ g <- ggplot(sal_clc_DE) +
   geom_segment(x = 2, xend=2, y=min(sal_clc_DE$CLC_logFC), yend=6.0, 
                color = '#89A45E', lty=2) + 
   geom_hline(yintercept=2, color = '#895881', lty=2) + 
-  geom_segment(x = -2, xend=-2, y=min(sal_clc_DE$CLC_logFC), yend=4.5, 
+
+  geom_segment(x = -2, xend=-2, y=min(sal_clc_DE$CLC_logFC),yend = max(sal_clc_DE$CLC_logFC),# yend=4.5, 
                color = '#89A45E', lty=2) + 
   geom_hline(yintercept=-2, color = '#895881', lty=2) + 
-  stat_poly_eq(aes(y=CLC_logFC, x=SAL_logFC,
-                   label = paste(..eq.label.., sep = "~~~"),), 
-               label.x.npc = "left", label.y.npc = 1,geom='text_npc',
-               eq.x.rhs = "~italic(x)", coef.digits = 2, color='#EF8B46',
-               formula = my.formula, parse = TRUE, size = 2) +
-  stat_poly_eq(aes(y=CLC_logFC, x=SAL_logFC,
-                   label = paste(..rr.label.., sep = "~~~"),), 
-    color='#EF8B46',geom='text_npc',
-               formula = my.formula, parse = TRUE, size = 2) + 
+  #stat_poly_eq(aes(y=CLC_logFC, x=SAL_logFC,
+  #                 label = paste(..eq.label.., sep = "~~~"),), 
+  #             label.x.npc = "left", label.y.npc = 1,geom='text_npc',
+  #             eq.x.rhs = "~italic(x)", coef.digits = 2, color='#EF8B46',
+  #             formula = my.formula, parse = TRUE, size = 2) +
+  #stat_poly_eq(aes(y=CLC_logFC, x=SAL_logFC,
+  #                 label = paste(..rr.label.., sep = "~~~"),), 
+  #  color='#EF8B46',geom='text_npc',
+   #            formula = my.formula, parse = TRUE, size = 2) + 
   scale_color_manual(values=c("BOTH" = '#EF8B46', 'CLC' = '#89A45E', 
                               'SAL' = '#895881', 'NONE' = 'grey'), guide=F) + 
-  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5) + #, base_size = 8
   #theme_pubr() +
-  ggsave('clc_vs_sal_logFC.png', height=1.7, width=1.7)
+  xlab('Salmon log fold-change') + ylab('CLC log fold-change') #+
+  #ggsave('clc_vs_sal_logFC_notxt.png', height=3, width=3, units = 'in')
+
 g
 
 ```
@@ -287,29 +648,748 @@ g <- ggplot(sal_clc_DE) +
   geom_smooth(aes(y=-log(CLC_FDR), x=-log(SAL_FDR)),method=lm, se=F, 
               fullrange=T, linetype=2, color='#EF8B46') +
    geom_abline(intercept=0, color = "black", lty=1) +
-  stat_poly_eq(aes(y=-log(CLC_FDR), x=-log(SAL_FDR),
-                   label = paste(..eq.label.., sep = "~~~")), 
-               label.x.npc = "left", label.y.npc = 1,
-               eq.x.rhs = "~italic(x)", coef.digits = 2, color='#EF8B46',
-               formula = my.formula, parse = TRUE, size = 2) +
-  stat_poly_eq(aes(y=-log(CLC_FDR), x=-log(SAL_FDR),
-                   label = paste(..rr.label.., sep = "~~~")), color='#EF8B46',
-               formula = my.formula, parse = TRUE, size = 2) + 
-      geom_segment(x = -log(0.05), xend=-log(0.05), 
-                   y=min(-log(sal_clc_DE$CLC_FDR)), yend=12, color = '#89A45E', 
-                   lty=2) + 
+
+  #stat_poly_eq(aes(y=-log(CLC_FDR), x=-log(SAL_FDR),
+  #                 label = paste(..eq.label.., sep = "~~~")), 
+  #             label.x.npc = "left", label.y.npc = 1,
+  #             eq.x.rhs = "~italic(x)", coef.digits = 2, color='#EF8B46',
+  #             formula = my.formula, parse = TRUE, size = 2) +
+  #stat_poly_eq(aes(y=-log(CLC_FDR), x=-log(SAL_FDR),
+  #                 label = paste(..rr.label.., sep = "~~~")), color='#EF8B46',
+  #             formula = my.formula, parse = TRUE, size = 2) + 
+  #    geom_segment(x = -log(0.05), xend=-log(0.05), 
+  #                 y=min(-log(sal_clc_DE$CLC_FDR)), yend=12, color = '#89A45E', 
+  #                 lty=2) + 
   geom_hline(yintercept=-log(0.05), color = '#895881', lty=2) + 
   scale_color_manual(values=c("BOTH" = '#EF8B46', 'CLC' = '#89A45E', 
                               'SAL' = '#895881', 'NONE' = 'grey'), guide=F) + 
-  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 8) +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5) + #, base_size = 8
   #theme_pubr() +
-  ggsave('clc_vs_sal_FDR.png', height=1.7, width=1.7)
+  xlab('Salmon -log FDR') + ylab('CLC -log FDR')
+  ggsave('clc_vs_sal_FDR_notxt.png', height=3, width=3, units='in')
 g
 ```
 
 
 
+```{r}
+pao1_comp <- read.csv('../qc_filtering/qc-out/pao1_aligned_compendium_p2_filtered_counts_norm.csv', stringsAsFactors = F, row.names = 1)
+pa14_comp <- read.csv('../qc_filtering/qc-out/pa14_aligned_compendium_p2_filtered_counts_norm.csv', stringsAsFactors = F, row.names = 1)
+acc_genes <- read.csv('Dataset_S5_PAO1_and_PA14_Accessory_Genes - Accessory Genes.csv', stringsAsFactors = F)
+strains <- read.csv('../make_pao1_pa14_compendia/Run_Table_Strain_Bool_GD.csv', stringsAsFactors = F)
+```
 
 
+
+```{r, message=F, warning=F}
+pao1_acc <- pao1_comp[acc_genes$PAO1_Locus.Tag[acc_genes$PAO1_Locus.Tag %in% rownames(pao1_comp)],]
+pa14_acc <- pa14_comp[acc_genes$PA14_Locus.Tag[acc_genes$PA14_Locus.Tag %in% rownames(pa14_comp)],]
+ncol(pao1_acc)
+ncol(pa14_acc)
+
+strain_colors <- sapply(colnames(pao1_acc), function(x){
+  exp <- substr(x,1,gregexpr('X',x)[[1]][2]-4)
+  if(strains$PAO1[strains$Experiment == exp]){
+    '#895881'
+  } else if(strains$PA14[strains$Experiment == exp]){
+    '#AF8DC3'
+  }else if(strains$PAK[strains$Experiment == exp]){
+    '#EF8B46'
+  }else if(strains$ClinicalIsolate[strains$Experiment == exp]){
+    '#89A45E'
+  }else{'grey'}
+})
+strain_by_exp <- sapply(colnames(pao1_acc), function(x){
+  exp <- substr(x,1,gregexpr('X',x)[[1]][2]-4)
+  if(strains$PAO1[strains$Experiment == exp]){
+    'PAO1'
+  } else if(strains$PA14[strains$Experiment == exp]){
+    'PA14'
+  }else if(strains$PAK[strains$Experiment == exp]){
+    'PAK'
+  }else if(strains$ClinicalIsolate[strains$Experiment == exp]){
+    'Clinical Isolate'
+  }else{'Other'}
+})
+```
+
+```{r}
+acc_gene_plot_df <- data.frame('Strain' = factor(strain_by_exp, levels = c('Clinical Isolate','PAK','PA14','PAO1','Other')),
+                               'PAO1' = apply(pao1_acc, 2, FUN = function(x) max(median(x),1)),
+                               'PA14' = apply(pa14_acc, 2, FUN = function(x) max(median(x),1)))
+```
+
+```{r}
+g <- ggplot(acc_gene_plot_df, aes(y=PA14, x=PAO1, color=Strain)) +
+  geom_point(data = acc_gene_plot_df[acc_gene_plot_df$Strain == 'Other',] ) +
+  geom_point(data = acc_gene_plot_df[acc_gene_plot_df$Strain != 'Other',]) +
+  geom_point(data = acc_gene_plot_df[acc_gene_plot_df$Strain == 'PAK',]) +
+  scale_color_manual(values = c('PA14' = '#895881',
+                               'PAO1' = '#AF8DC3',
+                               'PAK' = '#EF8B46',
+                               'Clinical Isolate' = '#89A45E',
+                               'Other' = 'grey')) +
+  scale_x_log10() + scale_y_log10() +
+  xlab("PAO1 accessory genes \n (median normalized counts)") +
+  ylab("PA14 accessory genes \n (median normalized counts)") +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size=14)
+   ggsave('PAO1_PA14_acc_genes.png', height=3.5, width=5.5 ,units='in')
+  
+g
+```
+
+```{r}
+g <- ggplot(acc_gene_plot_df, aes(y=PA14, x=PAO1, color=Strain)) +
+  geom_point(data = acc_gene_plot_df[acc_gene_plot_df$Strain == 'Other',] ) +
+  geom_point(data = acc_gene_plot_df[acc_gene_plot_df$Strain != 'Other',]) +
+  geom_point(data = acc_gene_plot_df[acc_gene_plot_df$Strain == 'PAK',]) +
+  #xlim(0,max(acc_gene_plot_df$PAO1[acc_gene_plot_df$Strain == 'PA14'])) +
+  xlim(0,25) +
+  scale_color_manual(values = c('PA14' = '#895881',
+                               'PAO1' = '#AF8DC3',
+                               'PAK' = '#EF8B46',
+                               'Clinical Isolate' = '#89A45E',
+                               'Other' = 'grey')) +
+  #scale_x_log10() + scale_y_log10() +
+    xlab("PAO1 accessory genes \n (median normalized counts)") +
+  ylab("PA14 accessory genes \n (median normalized counts)") +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5)
+   ggsave('PAO1_PA14_acc_genes_linear_PA14.png', height=3.5, width=5.5, units='in')
+  
+g
+```
+
+```{r}
+g <- ggplot(acc_gene_plot_df, aes(y=PA14, x=PAO1, color=Strain)) +
+  geom_point(data = acc_gene_plot_df[acc_gene_plot_df$Strain == 'Other',] ) +
+  geom_point(data = acc_gene_plot_df[acc_gene_plot_df$Strain != 'Other',]) +
+  geom_point(data = acc_gene_plot_df[acc_gene_plot_df$Strain == 'PAK',]) +
+  #xlim(0,max(acc_gene_plot_df$PAO1[acc_gene_plot_df$Strain == 'PA14'])) +
+  ylim(0,25) +
+  scale_color_manual(values = c('PA14' = '#895881',
+                               'PAO1' = '#AF8DC3',
+                               'PAK' = '#EF8B46',
+                               'Clinical Isolate' = '#89A45E',
+                               'Other' = 'grey')) +
+  #scale_x_log10() + scale_y_log10() +
+    xlab("PAO1 accessory genes \n (median normalized counts)") +
+  ylab("PA14 accessory genes \n (median normalized counts)") +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5)
+   ggsave('PAO1_PA14_acc_genes_linear_PAO1.png', height=3.5, width=5.5, units='in')
+  
+g
+```
+
+```{r, message=F, warning=F}
+strain_by_exp_pa14 <- sapply(colnames(pao1_acc), function(x){
+  exp <- substr(x,1,gregexpr('X',x)[[1]][2]-4)
+  if(strains$PAO1[strains$Experiment == exp]){
+    'Other'
+  } else if(strains$PA14[strains$Experiment == exp]){
+    'PA14'
+  }else if(strains$PAK[strains$Experiment == exp]){
+    'Other'
+  }else if(strains$ClinicalIsolate[strains$Experiment == exp]){
+    'Other'
+  }else{'Other'}
+})
+
+acc_gene_plot_df_pa14 <- data.frame('Strain' = factor(strain_by_exp_pa14, levels = c('Clinical Isolate','PAK','PA14','PAO1','Other')),
+                               'PAO1' = apply(pao1_acc, 2, FUN = function(x) max(median(x),1)),
+                               'PA14' = apply(pa14_acc, 2, FUN = function(x) max(median(x),1)))
+
+
+g <- ggplot(acc_gene_plot_df_pa14, aes(x=PA14, fill=Strain)) +
+  geom_histogram(data=acc_gene_plot_df_pa14[acc_gene_plot_df_pa14$Strain == 'Other',],aes(x=PA14, fill=Strain))+
+ geom_histogram(data=acc_gene_plot_df_pa14[acc_gene_plot_df_pa14$Strain == 'PA14',],aes(x=PA14, fill=Strain))+
+  scale_fill_manual(values = c('PA14' = '#895881',
+                               'PAO1' = '#AF8DC3',
+                               'PAK' = '#EF8B46',
+                               'Clinical Isolate' = '#89A45E',
+                               'Other' = 'grey')) +
+  #scale_x_log10() + 
+  #geom_vline(xintercept=25,color = '#EF8B46', lty=2) + #'#EF8B46'
+  scale_y_log10() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5,base_size = 8)
+   ggsave('PA14_acc_genes_hist.png', height=1, width=2, units='in')
+  
+g
+ggsave('PA14_acc_genes_hist_wide.png', height=1.5, width=2.5, units='in')
+```
+
+```{r, warning=F, message=F}
+strain_by_exp_pao1 <- sapply(colnames(pao1_acc), function(x){
+  exp <- substr(x,1,gregexpr('X',x)[[1]][2]-4)
+  if(strains$PAO1[strains$Experiment == exp]){
+    'PAO1'
+  } else if(strains$PA14[strains$Experiment == exp]){
+    'Other'
+  }else if(strains$PAK[strains$Experiment == exp]){
+    'Other'
+  }else if(strains$ClinicalIsolate[strains$Experiment == exp]){
+    'Other'
+  }else{'Other'}
+})
+
+acc_gene_plot_df_pao1 <- data.frame('Strain' = factor(strain_by_exp_pao1, levels = c('Clinical Isolate','PAK','PA14','PAO1','Other')),
+                               'PAO1' = apply(pao1_acc, 2, FUN = function(x) max(median(x),1)),
+                               'PA14' = apply(pa14_acc, 2, FUN = function(x) max(median(x),1)))
+
+
+g <- ggplot(acc_gene_plot_df_pao1, aes(x=PAO1, fill=Strain)) +
+  geom_histogram(data=acc_gene_plot_df_pao1[acc_gene_plot_df_pao1$Strain == 'Other',],aes(x=PAO1, fill=Strain))+
+ geom_histogram(data=acc_gene_plot_df_pao1[acc_gene_plot_df_pao1$Strain == 'PAO1',],aes(x=PAO1, fill=Strain))+
+  scale_fill_manual(values = c('PA14' = '#895881',
+                               'PAO1' = '#AF8DC3',
+                               'PAK' = '#EF8B46',
+                               'Clinical Isolate' = '#89A45E',
+                               'Other' = 'grey')) +
+  #scale_x_log10() + 
+  #geom_vline(xintercept=25,color = '#EF8B46', lty=2) + #'#EF8B46'
+  scale_y_log10() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size=8) +
+   ggsave('PAO1_acc_genes_hist.png', height=1, width=2, units='in')
+  
+g
+ggsave('PAO1_acc_genes_hist_wide.png', height=1.5, width=2.5, units='in')
+```
+
+```{r, warning=F, message=F}
+strain_by_exp_CI <- sapply(colnames(pao1_acc), function(x){
+  exp <- substr(x,1,gregexpr('X',x)[[1]][2]-4)
+  if(strains$PAO1[strains$Experiment == exp]){
+    'Other'
+  } else if(strains$PA14[strains$Experiment == exp]){
+    'Other'
+  }else if(strains$PAK[strains$Experiment == exp]){
+    'Other'
+  }else if(strains$ClinicalIsolate[strains$Experiment == exp]){
+    'Clinical Isolate'
+  }else{'Other'}
+})
+
+acc_gene_plot_df_CI <- data.frame('Strain' = factor(strain_by_exp_CI, levels = c('Clinical Isolate','PAK','PA14','PAO1','Other')),
+                               'PAO1' = apply(pao1_acc, 2, FUN = function(x) max(median(x),1)),
+                               'PA14' = apply(pa14_acc, 2, FUN = function(x) max(median(x),1)))
+
+
+g <- ggplot(acc_gene_plot_df_CI, aes(x=PAO1, fill=Strain)) +
+  geom_histogram(data=acc_gene_plot_df_CI[acc_gene_plot_df_CI$Strain == 'Other',],aes(x=PAO1, fill=Strain))+
+ geom_histogram(data=acc_gene_plot_df_CI[acc_gene_plot_df_CI$Strain == 'Clinical Isolate',],aes(x=PAO1, fill=Strain))+
+  scale_fill_manual(values = c('PA14' = '#895881',
+                               'PAO1' = '#AF8DC3',
+                               'PAK' = '#EF8B46',
+                               'Clinical Isolate' = '#89A45E',
+                               'Other' = 'grey')) +
+  #scale_x_log10() + 
+  #geom_vline(xintercept=25,color = '#EF8B46', lty=2) + #'#EF8B46'
+  scale_y_log10() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size=8) +
+   ggsave('CI_acc_genes_hist.png', height=1, width=2, units='in')
+  
+g
+ggsave('CI_acc_genes_hist_wide.png', height=1.5, width=2.5, units='in')
+
+g <- ggplot(acc_gene_plot_df_CI, aes(x=PA14, fill=Strain)) +
+  geom_histogram(data=acc_gene_plot_df_CI[acc_gene_plot_df_CI$Strain == 'Other',],aes(x=PA14, fill=Strain))+
+ geom_histogram(data=acc_gene_plot_df_CI[acc_gene_plot_df_CI$Strain == 'Clinical Isolate',],aes(x=PA14, fill=Strain))+
+  scale_fill_manual(values = c('PA14' = '#895881',
+                               'PAO1' = '#AF8DC3',
+                               'PAK' = '#EF8B46',
+                               'Clinical Isolate' = '#89A45E',
+                               'Other' = 'grey')) +
+  #scale_x_log10() + 
+  #geom_vline(xintercept=25,color = '#EF8B46', lty=2) + #'#EF8B46'
+  scale_y_log10() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size=8) +
+   ggsave('CI_pa14_acc_genes_hist.png', height=1, width=2, units='in')
+  
+g
+ggsave('CI_pa14_acc_genes_hist_wide.png', height=1.5, width=2.5, units='in')
+```
+
+```{r, warning=F, message=F}
+strain_by_exp_CI <- sapply(colnames(pao1_acc), function(x){
+  exp <- substr(x,1,gregexpr('X',x)[[1]][2]-4)
+  if(strains$PAO1[strains$Experiment == exp]){
+    'Other'
+  } else if(strains$PA14[strains$Experiment == exp]){
+    'Other'
+  }else if(strains$PAK[strains$Experiment == exp]){
+    'PAK'
+  }else if(strains$ClinicalIsolate[strains$Experiment == exp]){
+    'Other'
+  }else{'Other'}
+})
+
+acc_gene_plot_df_CI <- data.frame('Strain' = factor(strain_by_exp_CI, levels = c('Clinical Isolate','PAK','PA14','PAO1','Other')),
+                               'PAO1' = apply(pao1_acc, 2, FUN = function(x) max(median(x),1)),
+                               'PA14' = apply(pa14_acc, 2, FUN = function(x) max(median(x),1)))
+
+
+g <- ggplot(acc_gene_plot_df_CI, aes(x=PAO1, fill=Strain)) +
+  geom_histogram(data=acc_gene_plot_df_CI[acc_gene_plot_df_CI$Strain == 'Other',],aes(x=PAO1, fill=Strain))+
+ geom_histogram(data=acc_gene_plot_df_CI[acc_gene_plot_df_CI$Strain == 'PAK',],aes(x=PAO1, fill=Strain))+
+  scale_fill_manual(values = c('PA14' = '#895881',
+                               'PAO1' = '#AF8DC3',
+                               'PAK' = '#EF8B46',
+                               'Clinical Isolate' = '#89A45E',
+                               'Other' = 'grey')) +
+  #scale_x_log10() + 
+  #geom_vline(xintercept=25,color = '#EF8B46', lty=2) + #'#EF8B46'
+  scale_y_log10() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size=8) +
+   ggsave('PAK_acc_genes_hist.png', height=1, width=2, units='in')
+  
+g
+ggsave('PAK_acc_genes_hist_wide.png', height=1.5, width=2.5, units='in')
+
+g <- ggplot(acc_gene_plot_df_CI, aes(x=PA14, fill=Strain)) +
+  geom_histogram(data=acc_gene_plot_df_CI[acc_gene_plot_df_CI$Strain == 'Other',],aes(x=PA14, fill=Strain))+
+ geom_histogram(data=acc_gene_plot_df_CI[acc_gene_plot_df_CI$Strain == 'PAK',],aes(x=PA14, fill=Strain))+
+  scale_fill_manual(values = c('PA14' = '#895881',
+                               'PAO1' = '#AF8DC3',
+                               'PAK' = '#EF8B46',
+                               'Clinical Isolate' = '#89A45E',
+                               'Other' = 'grey')) +
+  #scale_x_log10() + 
+  #geom_vline(xintercept=25,color = '#EF8B46', lty=2) + #'#EF8B46'
+  scale_y_log10() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size=8) +
+   ggsave('PAK_pa14_acc_genes_hist.png', height=1, width=2, units='in')
+  
+g
+ggsave('PAK_pa14_acc_genes_hist_wide.png', height=1.5, width=2.5, units='in')
+
+```
+## Strain comparisons
+
+```{r}
+comb_counts <- read.csv('clc_salmon_pao1_pa14_counts.csv', stringsAsFactors = F)
+comb_met <- cbind(cbind(melt(comb_counts[,c(2:6)]),melt(comb_counts[,c(7:10)])),melt(comb_counts[,c(11:14)]))
+colnames(comb_met) <- c('pao1num','clc','clc.counts','sal14','sal14.counts','salO1','salO1.counts')
+
+```
+
+
+```{r}
+g <- ggplot(comb_met[comb_met$salO1.counts > 0 & comb_met$sal14.counts > 0 ,]) +
+  geom_point(aes(y=sal14.counts, x=salO1.counts, color = clc), alpha = 0.5) + 
+  scale_color_manual(values= c('wt_mops_1' = '#762A83','wt_mops_2' = '#998EC3',
+                       'pstB_mops_1' = '#D01C8B','pstB_mops_2' = '#F1B6DA'), guide = F) +
+                       #, shape=variable
+  #geom_point(aes(y=CLC, x=SALMONpaired), color='#895881') + #, shape=variable
+  #geom_text(x=3.75, hjust=0,y = 1.5, label = 'PAIRED', color='#C6A9B5', size=3.5) +
+  #geom_text(x=3.75, hjust=0,y = 1.2, label = 'UNPAIRED', color='#895881', size=3.5) +
+  #geom_smooth(data = comb_met[comb_met$clc %in% c('wt_mops_1','wt_mops_2'),],aes(y=sal14.counts, x=salO1.counts),method=lm, se=F, fullrange=T, linetype=2, color='#F1A340') +
+  #geom_smooth(comb_met[comb_met$clc %in% c('pstB_mops_1','pstB_mops_2'),],aes(y=sal14.counts, x=salO1.counts),method=lm, se=F, fullrange=T, linetype=2, color='#FEE0B6') +
+  #geom_smooth(aes(y=clc_a, x=s_a_2),method=lm, se=F, fullrange=T, linetype=2, color='grey') +
+  #stat_poly_eq(data = plt_df[plt_df$strain == 'PAO1',],
+  #             aes(y=pa14_counts.value, x=pao1_counts.value,label = paste(..eq.label.., sep = "~~~")), 
+  #             label.x.npc = "left", label.y.npc = 1,
+  #             #eq.with.lhs = "italic(hat(y))~`=`~",
+  #             eq.x.rhs = "~italic(x)", coef.digits = 2, color='#762A83',
+  #             formula = my.formula, parse = TRUE, size = 3.5) +
+  #stat_poly_eq(data = plt_df[plt_df$strain == 'PAO1',],
+  #             aes(y=pa14_counts.value, x=pao1_counts.value,label = paste(..rr.label.., sep = "~~~")), 
+  #             label.x.npc = "left", label.y.npc = 0.95,coef.digits = 2,color='#762A83',
+  #             formula = my.formula, parse = TRUE, size = 3.5) + 
+  #  stat_poly_eq(data = plt_df[plt_df$strain == 'PA14',],
+  #             aes(y=pa14_counts.value, x=pao1_counts.value,label = paste(..eq.label.., sep = "~~~")), 
+  #             label.x.npc = "left", label.y.npc = 0.875,
+  #             #eq.with.lhs = "italic(hat(y))~`=`~",
+  #             eq.x.rhs = "~italic(x)", coef.digits = 2, color='#998EC3',
+  #             formula = my.formula, parse = TRUE, size = 3.5) +
+  #stat_poly_eq(data = plt_df[plt_df$strain == 'PA14',],
+  #             aes(y=pa14_counts.value, x=pao1_counts.value,label = paste(..rr.label.., sep = "~~~")), 
+  #             label.x.npc = "left", label.y.npc = 0.825,coef.digits = 2,color='#998EC3',
+  #             formula = my.formula, parse = TRUE, size = 3.5) + 
+  
+  
+  xlab('PAO1 log(counts)') + ylab('PA14 log(counts)') +
+  scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_shape_discrete(guide='none') +
+  #facet_wrap(~variable)+
+  #theme_bw() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5) +
+  #theme_pubr() +
+  ggsave('sal_pao1_v_pa14_strain_color_counts_wt_pstB.png', height=3.4, width=3.4)
+  
+g
+```
+
+```{r}
+g <- ggplot(comb_met[comb_met$clc.counts > 0 & comb_met$sal14.counts > 0 ,]) +
+  geom_point(aes(y=clc.counts, x=sal14.counts, color = clc), alpha = 0.25)
+  scale_color_manual(values= c('wt_mops_1' = '#762A83','wt_mops_2' = '#762A83',
+                       'pstB_mops_1' = '#D01C8B','pstB_mops_2' = '#D01C8B'), guide = F) +
+
+  
+  xlab('Salmon log(counts)') + ylab('CLC log(counts)') +
+  scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_shape_discrete(guide='none') +
+  #facet_wrap(~variable)+
+  #theme_bw() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5) +
+  #theme_pubr() +
+  ggsave('sal_v_clc_counts_wt_pstB.png', height=3.4, width=3.4)
+  
+g
+```
+
+```{r, message=F, fig.height=4, fig.width=6}
+paired_for_cor <- data.frame(cbind(rowMeans(comb_counts[,c(3:4)]),rowMeans(comb_counts[,c(5:6)]),rowMeans(comb_counts[,c(7:8)]),rowMeans(comb_counts[,c(9:10)])))
+g <- ggpairs(paired_for_cor) +
+  
+  #scale_color_manual(values= c('wt_mops_1' = '#762A83','wt_mops_2' = '#762A83',
+   #                    'pstB_mops_1' = '#D01C8B','pstB_mops_2' = '#D01C8B'), guide = F) +
+
+  
+  xlab('Salmon log(counts)') + ylab('CLC log(counts)') +
+  #scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  #scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  #scale_shape_discrete(guide='none') +
+  #facet_wrap(~variable)+
+  #theme_bw() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5) 
+  #theme_pubr() +
+  #ggsave('sal_v_clc_counts_wt_pstB_ggpairs.png', height=3.4, width=3.4)
+  
+g
+```
+
+```{r}
+paired_for_cor <- data.frame(cbind(rowMeans(comb_counts[,c(3:4)]),rowMeans(comb_counts[,c(5:6)]),rowMeans(comb_counts[,c(7:8)]),rowMeans(comb_counts[,c(9:10)])))
+colnames(paired_for_cor) <- c('CLC_WT','CLC_pstB','Sal_WT','Sal_pstB')
+g <- ggplot(paired_for_cor) +
+  geom_point(aes(x=CLC_WT,y=CLC_pstB), color = '#7B3294', alpha=0.5)+
+  geom_point(aes(x=Sal_WT,y=Sal_pstB), color = '#C2A5CF', alpha=0.5)+
+  
+  geom_point(aes(x=CLC_WT,y=Sal_WT), color = '#E66101', alpha=0.5)+
+  geom_point(aes(x=CLC_pstB,y=Sal_pstB), color = '#FDB863', alpha=0.5)+
+  #scale_color_manual(values= c('wt_mops_1' = '#762A83','wt_mops_2' = '#762A83',
+   #                    'pstB_mops_1' = '#D01C8B','pstB_mops_2' = '#D01C8B'), guide = F) +
+
+  
+  xlab('Salmon log(counts)') + ylab('CLC log(counts)') +
+  scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_shape_discrete(guide='none') +
+  #facet_wrap(~variable)+
+  #theme_bw() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5) 
+  #theme_pubr() +
+  #ggsave('sal_v_clc_counts_wt_pstB_ggpairs.png', height=3.4, width=3.4)
+  
+g
+```
+
+```{r}
+paired_for_cor <- data.frame(cbind(rowMeans(comb_counts[,c(3:4)]),rowMeans(comb_counts[,c(5:6)]),rowMeans(comb_counts[,c(7:8)]),rowMeans(comb_counts[,c(9:10)])))
+colnames(paired_for_cor) <- c('CLC_WT','CLC_pstB','Sal_WT','Sal_pstB')
+paired_for_cor$pho_reg <- sapply(comb_counts$pao1num, function(x) x %in% pho_reg$V1)
+
+g <- ggplot(paired_for_cor) +
+  #geom_point(aes(x=CLC_WT,y=CLC_pstB, size=pho_reg), color = '#7B3294', alpha=0.25)+
+  geom_point(aes(x=Sal_WT,y=Sal_pstB, size=pho_reg), color = '#7B3294', alpha=0.25)+
+  
+   # geom_point(data = paired_for_cor[paired_for_cor$pho_reg,] ,aes(x=CLC_WT,y=CLC_pstB, size=pho_reg), color = '#7B3294', alpha=1, shape=21) +
+  geom_point(data = paired_for_cor[paired_for_cor$pho_reg,], aes(x=Sal_WT,y=Sal_pstB, size=pho_reg), color = '#7B3294', alpha=1, shape=21)+
+  
+  #geom_point(aes(x=CLC_WT,y=Sal_WT, size=pho_reg), color = '#E66101', alpha=0.25)+
+  geom_point(aes(x=CLC_pstB,y=Sal_pstB, size=pho_reg), color = '#E66101', alpha=0.25)+
+  
+    #geom_point(data = paired_for_cor[paired_for_cor$pho_reg,] ,aes(x=CLC_WT,y=Sal_WT, size=pho_reg), color = '#E66101', alpha=1, shape=21)+
+  geom_point(data = paired_for_cor[paired_for_cor$pho_reg,] ,
+             aes(x=CLC_pstB,y=Sal_pstB, size=pho_reg), color = '#E66101', alpha=1, shape=21)+
+  #scale_color_manual(values= c('wt_mops_1' = '#762A83','wt_mops_2' = '#762A83',
+   #                    'pstB_mops_1' = '#D01C8B','pstB_mops_2' = '#D01C8B'), guide = F) +
+
+  
+  xlab('Sal WT log(counts)') + ylab('pstB log(counts)') +
+  scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_shape_discrete(guide='none') +
+  scale_size_discrete(guide='none') +
+  #scale_y_continuous(name = 'First Axis',
+  #sec.axis = sec_axis(trans = ~.*1, name = 'second axis')) +
+  scale_y_log10(name ='CLC WT log(counts)',
+                labels=trans_format('log10',math_format(10^.x)),
+                sec.axis = sec_axis(trans = ~.*1, name = 'Sal pstB log(counts)',labels=trans_format('log10',math_format(10^.x)))) +
+  #facet_wrap(~variable)+
+  #theme_bw() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5) +
+  theme(axis.title.y.left = element_text(color = "#E66101"),
+        axis.title.y.right = element_text(color = "#7B3294")) +
+  #theme_pubr() +
+  ggsave('sal_v_clc_counts_wt_pstB_dooubleax.png', height=3, width=4)
+  
+g
+```
+
+```{r}
+paired_for_cor <- data.frame(cbind(rowMeans(comb_counts[,c(3:4)]),rowMeans(comb_counts[,c(5:6)]),rowMeans(comb_counts[,c(7:8)]),rowMeans(comb_counts[,c(9:10)])))
+colnames(paired_for_cor) <- c('CLC_WT','CLC_pstB','Sal_WT','Sal_pstB')
+paired_for_cor$pho_reg <- sapply(comb_counts$pao1num, function(x) x %in% pho_reg$V1)
+
+g <- ggplot(paired_for_cor) +
+  #geom_point(aes(x=CLC_WT,y=CLC_pstB, size=pho_reg), color = '#7B3294', alpha=0.25)+
+  geom_point(aes(x=Sal_WT,y=Sal_pstB, size=pho_reg), color = '#7B3294', alpha=0.25)+ #purple
+  
+   # geom_point(data = paired_for_cor[paired_for_cor$pho_reg,] ,aes(x=CLC_WT,y=CLC_pstB, size=pho_reg), color = '#7B3294', alpha=1, shape=21) +
+  geom_point(data = paired_for_cor[paired_for_cor$pho_reg,], aes(x=Sal_WT,y=Sal_pstB, size=pho_reg), color = '#7B3294', alpha=1, shape=21)+
+  
+  #geom_point(aes(x=CLC_WT,y=Sal_WT, size=pho_reg), color = '#E66101', alpha=0.25)+
+  geom_point(aes(y=CLC_WT,x=Sal_WT, size=pho_reg), color = '#E66101', alpha=0.25)+
+  
+    #geom_point(data = paired_for_cor[paired_for_cor$pho_reg,] ,aes(x=CLC_WT,y=Sal_WT, size=pho_reg), color = '#E66101', alpha=1, shape=21)+
+  geom_point(data = paired_for_cor[paired_for_cor$pho_reg,] ,
+             aes(y=CLC_WT,x=Sal_WT, size=pho_reg), color = '#E66101', alpha=1, shape=21)+
+  #scale_color_manual(values= c('wt_mops_1' = '#762A83','wt_mops_2' = '#762A83',
+   #                    'pstB_mops_1' = '#D01C8B','pstB_mops_2' = '#D01C8B'), guide = F) +
+
+  
+  xlab('Salmon WT log(counts)') + ylab('pstB log(counts)') +
+  scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_shape_discrete(guide='none') +
+  scale_size_discrete(guide='none') +
+  #scale_y_continuous(name = 'First Axis',
+  #sec.axis = sec_axis(trans = ~.*1, name = 'second axis')) +
+  scale_y_log10(name ='CLC WT log(counts)',
+                labels=trans_format('log10',math_format(10^.x)),
+                sec.axis = sec_axis(trans = ~.*1, name = 'Salmon pstB log(counts)',labels=trans_format('log10',math_format(10^.x)))) +
+  #facet_wrap(~variable)+
+  #theme_bw() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 14) +
+  theme(axis.title.y.left = element_text(color = "#E66101"),
+        axis.title.y.right = element_text(color = "#7B3294")) #+
+  #theme_pubr() +
+  #ggsave('sal_v_clc_counts_wt_pstB_dooubleax.png', height=3, width=4)
+  
+g
+```
+```{r}
+align_fit <- summary(lm(CLC_WT ~ Sal_WT, data = paired_for_cor))
+mut_fit <- summary(lm(Sal_pstB ~ Sal_WT, data = paired_for_cor))
+
+align_fit$adj.r.squared
+mut_fit$adj.r.squared
+```
+
+```{r}
+paired_for_cor <- data.frame(cbind(rowMeans(comb_counts[,c(3:4)]),rowMeans(comb_counts[,c(5:6)]),rowMeans(comb_counts[,c(7:8)]),rowMeans(comb_counts[,c(9:10)])))
+colnames(paired_for_cor) <- c('CLC_WT','CLC_pstB','Sal_WT','Sal_pstB')
+paired_for_cor$pho_reg <- sapply(comb_counts$pao1num, function(x) x %in% pho_reg$V1)
+
+g <- ggplot(paired_for_cor) +
+  #geom_point(aes(x=CLC_WT,y=CLC_pstB, size=pho_reg), color = '#7B3294', alpha=0.25)+
+  geom_point(aes(x=Sal_pstB,y=Sal_WT, size=pho_reg), color = '#7B3294', alpha=0.25)+ #purple
+  
+   # geom_point(data = paired_for_cor[paired_for_cor$pho_reg,] ,aes(x=CLC_WT,y=CLC_pstB, size=pho_reg), color = '#7B3294', alpha=1, shape=21) +
+  geom_point(data = paired_for_cor[paired_for_cor$pho_reg,], aes(x=Sal_pstB,y=Sal_WT, size=pho_reg), color = '#7B3294', alpha=1, shape=21)+
+  
+  #geom_point(aes(x=CLC_WT,y=Sal_WT, size=pho_reg), color = '#E66101', alpha=0.25)+
+  geom_point(aes(x=Sal_pstB,y=CLC_pstB, size=pho_reg), color = '#E66101', alpha=0.25)+
+  
+    #geom_point(data = paired_for_cor[paired_for_cor$pho_reg,] ,aes(x=CLC_WT,y=Sal_WT, size=pho_reg), color = '#E66101', alpha=1, shape=21)+
+  geom_point(data = paired_for_cor[paired_for_cor$pho_reg,] ,
+             aes(x=Sal_pstB,y=CLC_pstB, size=pho_reg), color = '#E66101', alpha=1, shape=21)+
+  #scale_color_manual(values= c('wt_mops_1' = '#762A83','wt_mops_2' = '#762A83',
+   #                    'pstB_mops_1' = '#D01C8B','pstB_mops_2' = '#D01C8B'), guide = F) +
+
+  
+  xlab('Sal pstB log(counts)') + ylab('Sal WT log(counts)') +
+  scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_shape_discrete(guide='none') +
+  scale_size_discrete(guide='none') +
+  #scale_y_continuous(name = 'First Axis',
+  #sec.axis = sec_axis(trans = ~.*1, name = 'second axis')) +
+  scale_y_log10(name ='CLC pstB log(counts)',
+                labels=trans_format('log10',math_format(10^.x)),
+                sec.axis = sec_axis(trans = ~.*1, name = 'Sal WT log(counts)',labels=trans_format('log10',math_format(10^.x)))) +
+  #facet_wrap(~variable)+
+  #theme_bw() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5, base_size = 14) +
+  theme(axis.title.y.left = element_text(color = "#E66101"),
+        axis.title.y.right = element_text(color = "#7B3294")) +
+  #theme_pubr() +
+  ggsave('sal_v_clc_counts_wt_pstB_dooubleaxpstB.png', height=3, width=4)
+  
+g
+```
+
+```{r}
+paired_for_cor <- data.frame(cbind(rowMeans(comb_counts[,c(3:4)]),rowMeans(comb_counts[,c(5:6)]),rowMeans(comb_counts[,c(7:8)]),rowMeans(comb_counts[,c(9:10)])))
+
+g <- ggcorrplot(cor(comb_counts[,c(3:10)]), hc.order = T, 
+                colors = c("white","#AF8DC3","#EF8B46"), lab = T, type = "upper") +
+  
+  #scale_color_manual(values= c('wt_mops_1' = '#762A83','wt_mops_2' = '#762A83',
+   #                    'pstB_mops_1' = '#D01C8B','pstB_mops_2' = '#D01C8B'), guide = F) +
+
+  
+  #xlab('Salmon log(counts)') + ylab('CLC log(counts)') +
+  #scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  #scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  #scale_shape_discrete(guide='none') +
+  #facet_wrap(~variable)+
+  #theme_bw() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5) 
+  #theme_pubr() +
+  #ggsave('sal_v_clc_counts_wt_pstB_ggpairs.png', height=3.4, width=3.4)
+  
+g
+```
+
+
+
+```{r}
+pao1_comp_counts <- read.csv('../qc_filtering/qc-out/pao1_aligned_compendium_p2_filtered_counts.csv', stringsAsFactors = F, row.names = 1)
+
+pa14_comp_counts <- read.csv('../qc_filtering/qc-out/pa14_aligned__compendium_p2_filtered_counts.csv', stringsAsFactors = F, row.names = 1)
+strains <- read.csv('../make_pao1_pa14_compendia/Run_Table_Strain_Bool_GD.csv', stringsAsFactors = F)
+
+pa14_comp_panums <- sapply(rownames(pa14_comp_counts), function(x) PA14_to_PAO1(x))
+```
+
+```{r}
+pao1_samps <- strains$Experiment[strains$PAO1 == T]
+pa14_samps <- strains$Experiment[strains$PA14 == T]
+
+pao1_samps_names <- paste0(paste(pao1_samps, pao1_samps, sep='.'),'.salmon')
+pa14_samps_names <- paste0(paste(pa14_samps, pa14_samps, sep='.'),'.salmon')
+
+pao1_samps10 <- sample(pao1_samps_names[pao1_samps_names %in% colnames(pao1_comp_counts)],10)
+pa14_samps10 <- sample(pa14_samps_names[pa14_samps_names %in% colnames(pa14_comp_counts)],10)
+
+core_genes <- intersect(rownames(pao1_comp_counts),pa14_comp_panums )
+core_genes_pa14 <- sapply(core_genes, function(x) PAO1_to_PA14(x))
+
+strain_counts_df <- data.frame('Gene' = core_genes,
+                               'PAO1 counts' = melt(pao1_comp_counts[core_genes,
+                                                                     c(pao1_samps10, pa14_samps10)])[,'value'],
+                               'PA14 counts' = melt(pa14_comp_counts[core_genes_pa14,
+                                                                c(pao1_samps10, pa14_samps10)])[,'value'],
+                               'Strain' = rep(rep(c('PAO1','PA14'), each = length(core_genes) * 10),2)
+                               )
+```
+
+```{r}
+g <- ggplot(strain_counts_df[strain_counts_df$PAO1.counts > 1 & strain_counts_df$PA14.counts > 1 ,]) +
+  geom_point(aes(y=PAO1.counts, x=PA14.counts, color = Strain), alpha = 0.5) + 
+  scale_color_manual(values= c('PAO1' = '#762A83','PA14' = '#998EC3',
+                       'pstB_mops_1' = '#D01C8B','pstB_mops_2' = '#F1B6DA'), guide = F) +
+                       #, shape=variable
+  #geom_point(aes(y=CLC, x=SALMONpaired), color='#895881') + #, shape=variable
+  #geom_text(x=3.75, hjust=0,y = 1.5, label = 'PAIRED', color='#C6A9B5', size=3.5) +
+  #geom_text(x=3.75, hjust=0,y = 1.2, label = 'UNPAIRED', color='#895881', size=3.5) +
+  #geom_smooth(data = comb_met[comb_met$clc %in% c('wt_mops_1','wt_mops_2'),],aes(y=sal14.counts, x=salO1.counts),method=lm, se=F, fullrange=T, linetype=2, color='#F1A340') +
+  #geom_smooth(comb_met[comb_met$clc %in% c('pstB_mops_1','pstB_mops_2'),],aes(y=sal14.counts, x=salO1.counts),method=lm, se=F, fullrange=T, linetype=2, color='#FEE0B6') +
+  #geom_smooth(aes(y=clc_a, x=s_a_2),method=lm, se=F, fullrange=T, linetype=2, color='grey') +
+  #stat_poly_eq(data = plt_df[plt_df$strain == 'PAO1',],
+  #             aes(y=pa14_counts.value, x=pao1_counts.value,label = paste(..eq.label.., sep = "~~~")), 
+  #             label.x.npc = "left", label.y.npc = 1,
+  #             #eq.with.lhs = "italic(hat(y))~`=`~",
+  #             eq.x.rhs = "~italic(x)", coef.digits = 2, color='#762A83',
+  #             formula = my.formula, parse = TRUE, size = 3.5) +
+  #stat_poly_eq(data = plt_df[plt_df$strain == 'PAO1',],
+  #             aes(y=pa14_counts.value, x=pao1_counts.value,label = paste(..rr.label.., sep = "~~~")), 
+  #             label.x.npc = "left", label.y.npc = 0.95,coef.digits = 2,color='#762A83',
+  #             formula = my.formula, parse = TRUE, size = 3.5) + 
+  #  stat_poly_eq(data = plt_df[plt_df$strain == 'PA14',],
+  #             aes(y=pa14_counts.value, x=pao1_counts.value,label = paste(..eq.label.., sep = "~~~")), 
+  #             label.x.npc = "left", label.y.npc = 0.875,
+  #             #eq.with.lhs = "italic(hat(y))~`=`~",
+  #             eq.x.rhs = "~italic(x)", coef.digits = 2, color='#998EC3',
+  #             formula = my.formula, parse = TRUE, size = 3.5) +
+  #stat_poly_eq(data = plt_df[plt_df$strain == 'PA14',],
+  #             aes(y=pa14_counts.value, x=pao1_counts.value,label = paste(..rr.label.., sep = "~~~")), 
+  #             label.x.npc = "left", label.y.npc = 0.825,coef.digits = 2,color='#998EC3',
+  #             formula = my.formula, parse = TRUE, size = 3.5) + 
+  
+  
+  xlab('PAO1 log(counts)') + ylab('PA14 log(counts)') +
+  scale_x_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_y_log10(labels=trans_format('log10',math_format(10^.x))) +
+  scale_shape_discrete(guide='none') +
+  #facet_wrap(~variable)+
+  #theme_bw() +
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5) +
+  #theme_pubr() +
+  ggsave('sal_pao1_v_pa14_strain_color_counts_sample10.png', height=3.4, width=3.4)
+  
+g
+```
+
+
+```{r}
+strain_fit <- summary(lm(PAO1.counts ~ PA14.counts, data = strain_counts_df))
+strain_fit$adj.r
+strain_fit <- summary(lm(PAO1.counts ~ PA14.counts, data = strain_counts_df[strain_counts_df$PAO1.counts > 1 & strain_counts_df$PA14.counts > 1 ,]))
+strain_fit$adj.r
+```
+
+```{r}
+pao1_DE <- read.csv('salmon_mops_edgeR_PAO1.csv', stringsAsFactors = F)
+pa14_DE <- read.csv('salmon_mops_edgeR_PA14.csv', stringsAsFactors = F)
+
+strain_DE <- merge(pao1_DE[,-1],pa14_DE[,-1], by='genes')
+```
+
+```{r}
+my.formula <- y ~ x
+
+strain_DE$pao1_mag <- sapply(strain_DE$logFC.x, function(x) abs(x) > 2)
+strain_DE$pa14_mag <- sapply(strain_DE$logFC.y, function(x) abs(x) > 2)
+
+strain_DE$both_mag <- strain_DE$pao1_mag &  strain_DE$pa14_mag 
+strain_DE$mag <- sapply(strain_DE$both_mag, function(x) if(x){"BOTH"})
+strain_DE$mag[(!strain_DE$both_mag) & strain_DE$pao1_mag] <- 'PAO1'
+strain_DE$mag[(!strain_DE$both_mag) & strain_DE$pa14_mag] <- 'PA14'
+strain_DE$mag[(!strain_DE$pao1_mag) & (!strain_DE$pa14_mag)] <- 'NONE'
+strain_DE$mag <- as.character(strain_DE$mag)
+
+
+g <- ggplot(strain_DE) +
+  geom_point(aes(y=logFC.y, x=logFC.x, color = mag)) +
+  geom_smooth(aes(y=logFC.x, x=logFC.y),method=lm, se=F, fullrange=T, 
+              linetype=2, color='#EF8B46') +
+  geom_abline(intercept=0, color = "black", lty=1) +
+  geom_segment(x = 2, xend=2, y=min(strain_DE$logFC.x), yend=6.0, 
+               color = '#89A45E', lty=2) + 
+  geom_hline(yintercept=2, color = '#895881', lty=2) + 
+  geom_segment(x = -2, xend=-2, y=min(strain_DE$logFC.x),yend = max(strain_DE$logFC.x),# yend=4.5, 
+               color = '#89A45E', lty=2) + 
+  geom_hline(yintercept=-2, color = '#895881', lty=2) + 
+  #stat_poly_eq(aes(y=CLC_logFC, x=SAL_logFC,
+  #                 label = paste(..eq.label.., sep = "~~~"),), 
+  #             label.x.npc = "left", label.y.npc = 1,geom='text_npc',
+  #             eq.x.rhs = "~italic(x)", coef.digits = 2, color='#EF8B46',
+  #             formula = my.formula, parse = TRUE, size = 2) +
+  #stat_poly_eq(aes(y=CLC_logFC, x=SAL_logFC,
+  #                 label = paste(..rr.label.., sep = "~~~"),), 
+  #  color='#EF8B46',geom='text_npc',
+   #            formula = my.formula, parse = TRUE, size = 2) + 
+  scale_color_manual(values=c("BOTH" = '#EF8B46', 'PAO1' = '#89A45E', 
+                              'PA14' = '#895881', 'NONE' = 'grey'), guide=F) + 
+  theme_prism(base_fontface = 'plain', base_line_size = 0.5) + #, base_size = 8
+  #theme_pubr() +
+  xlab('PAO1 log fold-change') + ylab('PA14 log fold-change') +
+  ggsave('pao1_vs_pa14_logFC_notxt.png', height=3, width=3, units = 'in')
+g
+```
+
+
+
+```{r}
+mean(PAO1_orth$Percent.Identity[PAO1_orth$Strain..Hit. == 'Pseudomonas aeruginosa UCBPP-PA14'])
+mean(PA14_orth$Percent.Identity[PA14_orth$Strain..Hit. == 'Pseudomonas aeruginosa PAO1 (Reference)'])
+
+median(PAO1_orth$Percent.Identity[PAO1_orth$Strain..Hit. == 'Pseudomonas aeruginosa UCBPP-PA14'])
+median(PA14_orth$Percent.Identity[PA14_orth$Strain..Hit. == 'Pseudomonas aeruginosa PAO1 (Reference)'])
 
 
