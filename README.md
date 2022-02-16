@@ -7,15 +7,17 @@ RNAseq data from the NBCI SRA database and process them with salmon. It works of
 a pre-downloaded SRA run table and pre-determined salmon parameters.
 
 Before using the PBS script, the headers will need to be altered to run through a specific user
-account on Dartmouth's disocvery cluster and/or dirs in bash scripts will need to be
-restructured. 
+account on Dartmouth's discovery cluster and/or dirs in bash scripts will need to be
+restructured.
 
 ## Installation
 
-If these scripts are run locally they require the SRAtoolkit and salmon. 
+If these scripts are run locally they require the SRAtoolkit and salmon.
 These software packages can be installed using miniconda.
 
-All software necesary has been installed on dscovery by admin.
+All software necessary has been installed on discovery by admin.
+
+All related files are stored on OSF: https://osf.io/s9gyu/
 
 ## Usage
 
