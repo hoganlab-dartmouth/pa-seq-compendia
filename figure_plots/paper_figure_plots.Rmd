@@ -35,8 +35,10 @@ This figure illustrates the salmon mapping parameters that worked bets for mappi
 
 This data was from Jake's rotation repo [sraProcessingPipeline](https://github.com/hoganlab-dartmouth/sraProcessingPipeline) .
 ```{r}
+
 sal_clc_data <- read.csv('../salmon_params/salmon_clc_df.csv', 
                          stringsAsFactors = F,
+
                          row.names=1)
 ```
 
@@ -76,6 +78,7 @@ sal_clc_data_melt$paired <- sapply(sal_clc_data_melt$variable, function(x){
       'unpaired'}
   })
 # separate the data by method and parameter
+
 clc_melt <- melt(cbind('gene'=rownames(sal_clc_data),sal_clc_data[,1:4]), 
                  value.name = 'CLC')
 sal1_melt <- melt(cbind('gene'=rownames(sal_clc_data),sal_clc_data[,5:8]), 
@@ -83,8 +86,10 @@ sal1_melt <- melt(cbind('gene'=rownames(sal_clc_data),sal_clc_data[,5:8]),
 sal2_melt <- melt(cbind('gene'=rownames(sal_clc_data),sal_clc_data[,9:12]), 
                   value.name = 'SALMON-paired')
 
+
 # recombine data so paired and unpaired are both matched to CLC values
 clc_data_agg <- cbind(clc_melt, 'SALMONunpaired'=sal1_melt[,3], 'SALMONpaired'=sal2_melt[,3])
+
 
 # plot in ggplot2
 my.formula <- y ~ x
@@ -469,6 +474,7 @@ g <- ggplot(res_df, aes(color=as.factor(op_size),y=abs(residuals), x = param)) +
 g
 ```
 
+
 ```{r}
 unpaired_fit <- summary(lm(clc_a ~ s_a_1, data = sal_clc_data))
 paired_fit <- summary(lm(clc_a ~ s_a_2, data = sal_clc_data))
@@ -555,12 +561,14 @@ g <- ggplot(sal_clc_DE) +
   geom_vline(xintercept = 2, color = "#EF8B46", lty=2) + 
   geom_vline(xintercept = -2, color = "#EF8B46", lty=2) + 
   geom_hline(yintercept =-log(0.05), color = "#EF8B46", lty=2) + 
+
   xlab('log fold-change') + ylab('-log FDR') + 
   #geom_text(x=-5.5, y = 14, label = 'CLC', color='#89A45E', size=6) +
   #geom_text(x=-4.0, y = 12, label = 'SALMON', color='#895881', size=6) +
   theme_prism(base_fontface = 'plain', base_line_size = 0.5) #+
   #scale_color_manual(values = c('black','red'), labels = c('CLC','SALMON')) +
   #ggsave('clc_vs_sal_DE_volcano_pho_colored_notxt.png', height=3, width=3, units='in')
+
 g
 ```
 
@@ -593,6 +601,7 @@ g <- ggplot(sal_clc_DE) +
   geom_segment(x = 2, xend=2, y=min(sal_clc_DE$CLC_logFC), yend=6.0, 
                color = '#89A45E', lty=2) + 
   geom_hline(yintercept=2, color = '#895881', lty=2) + 
+
   geom_segment(x = -2, xend=-2, y=min(sal_clc_DE$CLC_logFC),yend = max(sal_clc_DE$CLC_logFC),# yend=4.5, 
                color = '#89A45E', lty=2) + 
   geom_hline(yintercept=-2, color = '#895881', lty=2) + 
@@ -611,6 +620,7 @@ g <- ggplot(sal_clc_DE) +
   #theme_pubr() +
   xlab('Salmon log fold-change') + ylab('CLC log fold-change') #+
   #ggsave('clc_vs_sal_logFC_notxt.png', height=3, width=3, units = 'in')
+
 g
 
 ```
@@ -636,6 +646,7 @@ g <- ggplot(sal_clc_DE) +
   geom_smooth(aes(y=-log(CLC_FDR), x=-log(SAL_FDR)),method=lm, se=F, 
               fullrange=T, linetype=2, color='#EF8B46') +
    geom_abline(intercept=0, color = "black", lty=1) +
+
   #stat_poly_eq(aes(y=-log(CLC_FDR), x=-log(SAL_FDR),
   #                 label = paste(..eq.label.., sep = "~~~")), 
   #             label.x.npc = "left", label.y.npc = 1,
@@ -1309,6 +1320,7 @@ g <- ggplot(strain_counts_df[strain_counts_df$PAO1.counts > 1 & strain_counts_df
   #theme_pubr() +
   ggsave('sal_pao1_v_pa14_strain_color_counts_sample10.png', height=3.4, width=3.4)
   
+
 g
 ```
 
@@ -1379,4 +1391,5 @@ mean(PA14_orth$Percent.Identity[PA14_orth$Strain..Hit. == 'Pseudomonas aeruginos
 median(PAO1_orth$Percent.Identity[PAO1_orth$Strain..Hit. == 'Pseudomonas aeruginosa UCBPP-PA14'])
 median(PA14_orth$Percent.Identity[PA14_orth$Strain..Hit. == 'Pseudomonas aeruginosa PAO1 (Reference)'])
 ```
+
 

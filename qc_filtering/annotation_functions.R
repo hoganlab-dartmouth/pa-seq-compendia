@@ -22,6 +22,7 @@
 # load in annotation files 
 # (all originally sources from www.pseudomonas.com)
 
+
 PAO1_orth <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/Pseudomonas_aeruginosa_PAO1_107_orthologs.csv', stringsAsFactors = FALSE)
 #PAO1_orth <- tryCatch(read.csv('Pseudomonas_aeruginosa_PAO1_107_orthologs.csv', stringsAsFactors = F),
 #                       .e = function(e){
@@ -73,6 +74,7 @@ PA14_cdna <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/pa14_cdna_gen
 #                        #read.csv('pa14_cdna_gene_names.csv', stringsAsFactors = F)
 #                      }, finally = print("PA14_cdna")
 #)
+
 # functions
 
 #' Convert from 3 or 4 letter name to PAO1 number syntax
