@@ -20,43 +20,61 @@
 ## ---------------------------
 
 # load in annotation files 
-# (all orginally sources from www.pseudomonas.com)
+# (all originally sources from www.pseudomonas.com)
 
-#PAO1_orth <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/Pseudomonas_aeruginosa_PAO1_107_orthologs.csv', stringsAsFactors = FALSE)
-download.file('https://pseudomonas.com/downloads/pseudomonas/pgd_r_20_2/Pseudomonas_aeruginosa_PAO1_107/Pseudomonas_aeruginosa_PAO1_107_orthologs.csv.gz',
-              'PAO1_orthologs.csv.gz')
-unzip('PAO1_orthologs.csv.gz')
-PAO1_orth <- read.csv('PAO1_orthologs.csv', stringsAsFactors = F)
 
-#PA14_orth <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/Pseudomonas_aeruginosa_UCBPP-PA14_109_orthologs.csv', stringsAsFactors = FALSE)
-download.file('https://pseudomonas.com/downloads/pseudomonas/pgd_r_20_2/Pseudomonas_aeruginosa_UCBPP-PA14_109/Pseudomonas_aeruginosa_UCBPP-PA14_109_orthologs.csv.gz',
-              'PA14_orthologs.csv.gz')
-unzip('PA14_orthologs.csv.gz')
-PA14_orth <- read.csv('PA14_orthologs.csv.gz', stringsAsFactors = F)
+PAO1_orth <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/Pseudomonas_aeruginosa_PAO1_107_orthologs.csv', stringsAsFactors = FALSE)
+#PAO1_orth <- tryCatch(read.csv('Pseudomonas_aeruginosa_PAO1_107_orthologs.csv', stringsAsFactors = F),
+#                       .e = function(e){
+#                         download.file('https://pseudomonas.com/downloads/pseudomonas/pgd_r_20_2/Pseudomonas_aeruginosa_PAO1_107/Pseudomonas_aeruginosa_PAO1_107_orthologs.csv.gz',
+#                                       'PAO1_orthologs.csv.gz')
+#                         read.csv('PAO1_orthologs.csv.gz', stringsAsFactors = F)
+#                       }, finally = print("PAO1_orth")
+#)
 
-#PA14_ann <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/Pseudomonas_aeruginosa_UCBPP-PA14_109.csv', stringsAsFactors = FALSE, skip = 2)
-download.file('https://pseudomonas.com/downloads/pseudomonas/pgd_r_20_2/Pseudomonas_aeruginosa_UCBPP-PA14_109/Pseudomonas_aeruginosa_UCBPP-PA14_109.csv.gz',
-              'PAO1_orthologs.csv.gz')
-unzip('PA14_annotations.csv.gz')
-PA14_ann <- read.csv('PA14_annotations.csv', stringsAsFactors = F)
+PA14_orth <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/Pseudomonas_aeruginosa_UCBPP-PA14_109_orthologs.csv', stringsAsFactors = FALSE)
+#PA14_orth <- tryCatch(read.csv('Pseudomonas_aeruginosa_UCBPP-PA14_109_orthologs.csv', stringsAsFactors = F),
+#                       error = function(e){
+#                         download.file('https://pseudomonas.com/downloads/pseudomonas/pgd_r_20_2/Pseudomonas_aeruginosa_UCBPP-PA14_109/Pseudomonas_aeruginosa_UCBPP-PA14_109_orthologs.csv.gz',
+#                                       'PA14_orthologs.csv.gz')
+#                         read.csv('PA14_orthologs.csv.gz', stringsAsFactors = F)
+#                       },finally = print("PAO1_orth")
+#)
 
-#PAO1_ann <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/Pseudomonas_aeruginosa_PAO1_107.csv', stringsAsFactors = FALSE, skip = 2)
-download.file('https://pseudomonas.com/downloads/pseudomonas/pgd_r_20_2/Pseudomonas_aeruginosa_PAO1_107/Pseudomonas_aeruginosa_PAO1_107.csv.gz',
-              'PAO1_annotations.csv.gz')
-unzip('PAO1_annotations.csv.gz')
-PAO1_ann <- read.csv('PAO1_annotations.csv', stringsAsFactors = F)
+PA14_ann <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/Pseudomonas_aeruginosa_UCBPP-PA14_109.csv', stringsAsFactors = FALSE, skip = 2)
+#PA14_ann <- tryCatch(read.csv('Pseudomonas_aeruginosa_UCBPP-PA14_109.csv', stringsAsFactors = F),
+#                      error = function(e){
+#                        download.file('https://pseudomonas.com/downloads/pseudomonas/pgd_r_20_2/Pseudomonas_aeruginosa_UCBPP-PA14_109/Pseudomonas_aeruginosa_UCBPP-PA14_109.csv.gz',
+#                                      'PA14_annotations.csv.gz')
+#                        read.csv('PA14_annotations.csv.gz', stringsAsFactors = F)
+#                      },finally = print("PA14_ann")
+#)
 
-#PAO1_cdna <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/pao1_asm676v1cdna_gene_names.csv', stringsAsFactors = F)
-download.file('https://pseudomonas.com/downloads/pseudomonas/pgd_r_20_2/Pseudomonas_aeruginosa_PAO1_107/Pseudomonas_aeruginosa_PAO1_107.ffn.gz',
-              'PAO1_cDNA.csv.gz')
-unzip('PAO1_cDNA.csv.gz')
-PAO1_cdna <- read.csv('PAO1_cDNA.csv', stringsAsFactors = F)
+PAO1_ann <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/Pseudomonas_aeruginosa_PAO1_107.csv', stringsAsFactors = FALSE, skip = 2)
+#PAO1_ann <- tryCatch(read.csv('Pseudomonas_aeruginosa_PAO1_107.csv', stringsAsFactors = F),
+#                     error = function(e){
+#                       download.file('https://pseudomonas.com/downloads/pseudomonas/pgd_r_20_2/Pseudomonas_aeruginosa_PAO1_107/Pseudomonas_aeruginosa_PAO1_107.csv.gz',
+#                                     'PAO1_annotations.csv.gz')
+#                       read.csv('PAO1_annotations.csv.gz', stringsAsFactors = F)
+#                     },finally = print("PAO1_ann")
+#)
 
-#PA14_cdna <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/pa14_cdna_gene_names.csv', stringsAsFactors = F)
-download.file('https://pseudomonas.com/downloads/pseudomonas/pgd_r_20_2/Pseudomonas_aeruginosa_UCBPP-PA14_109/Pseudomonas_aeruginosa_UCBPP-PA14_109.ffn.gz',
-              'PAO1_orthologs.csv.gz')
-unzip('PA14_cDNA.csv.gz')
-PA14_cdna <- read.csv('PA14_cDNA.csv', stringsAsFactors = F)
+PAO1_cdna <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/pao1_asm676v1cdna_gene_names.csv', stringsAsFactors = F)
+#PAO1_cdna <- tryCatch(read.csv('pao1_asm676v1cdna_gene_names.csv', stringsAsFactors = F),
+#                      error = function(e){
+#                        print("need cDNA to PA num mapping")
+#                        #read.csv('pao1_asm676v1cdna_gene_names.csv', stringsAsFactors = F)
+#                      },finally = print("PAO1_cdna")
+#)
+
+PA14_cdna <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/pa14_cdna_gene_names.csv', stringsAsFactors = F)
+#PA14_cdna <- tryCatch(read.csv('pa14_cdna_gene_names.csv', stringsAsFactors = F),
+#                      error = function(e){
+#                        print("need cDNA to PA num mapping")
+#                        #read.csv('pa14_cdna_gene_names.csv', stringsAsFactors = F)
+#                      }, finally = print("PA14_cdna")
+#)
+
 # functions
 
 #' Convert from 3 or 4 letter name to PAO1 number syntax

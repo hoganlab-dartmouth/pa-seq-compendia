@@ -1,0 +1,82 @@
+#!/bin/bash -l
+
+################################################################################
+#Script Name: sra_to_salmon_pa14.pbs
+#Description: Submission script for sra_to_salmon job arrays
+#Args       : None 
+#Author     : Georgia Doing
+#Email      : Georgia.Doing.GR@Dartmouth.edu
+################################################################################
+
+#PBS -q largeq
+#PBS -A NCCC
+#PBS -N s2sO1
+#PBS -l walltime=15:00:00
+#PBS -l nodes=1:ppn=6
+#PBS -m bea
+#PBS -M Georgia.Doing.GR@Dartmouth.edu
+#PBS -t 0-1500%50
+#PBS -j oe
+#PBS -e /dartfs-hpc/scratch/f002bx6/salmon/sra_comp/oe
+#PBS -o /dartfs-hpc/scratch/f002bx6/salmon/sra_comp/oe
+#PBS -l feature='cellk'
+
+#SBATCH --partition=standard
+##SBATCH --partition=bigmem
+#SBATCH --job-name=s2sO1
+#SBATCH --time=15:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=6
+#SBATCH --mail-type=FAIL
+#SBATCH --mail-user=Georgia.Doing.GR@Dartmouth.edu
+#SBATCH --array=1-1500%50
+#SBATCH --output=/dartfs-hpc/scratch/f002bx6/salmon/sra_comp/oe
+##SBATCH --mem=128G
+#SBATCH --hostlist=[k01-58]
+
+# This is a job array submission script that passes array
+# indices and a directory to a bash script which initiates
+# the processing of the experiment-specific file (SRX or ERX)
+# in the specified directory at the specified index.
+
+# This level of parallelization, at the expeirment level,
+# allows for each job to download and process together (in a
+# single salmon quant call) the sequence
+# data associated with a single experiement accession, 
+# which for this data is 1-10 fastq files and 8KB - 18GB. Each
+# job is given 1 processor and 30 min, 3013 jobs are submitted
+# and run 20 at a time.
+
+# To the best of my understanding, SRA experiment accessions
+# correspond to the common understanding of a sample.
+
+# Th header contains information specific to the dartmouth
+# discovery user f002bx6, Georgia Doing.
+
+# See sra2sal_byx.sh for directory requirements.
+
+
+
+
+cd $SLURM_SUBMIT_DIR
+
+less $SLURM_JOB_NODELIST
+#echo $PBS_JOBID
+mkdir -p /scratch/f002bx6
+mkdir /scratch/f002bx6/$SLURM_JOB_ID
+#ls -R /scratch/$PBS_JOBID
+
+if ../shell_scripts/sra2sal_byx.sh ${SLURM_ARRAY_TASK_ID} pao1_cdna_k15 ; then
+    echo $SLURM_JOB_ID quant succeeded
+    du -h --max-depth 1 /scratch/f002bx6
+#    ls /scratch/$PBS_JOBID
+else
+    rc=$?
+    echo $SLURM_JOB_ID quant failed
+    du -h --max-depth 1 /scratch/f002bx6
+    rm -r /scratch/f002bx6/$SLURM_JOB_ID
+    du -h --max-depth 1 /scratch/f002bx6
+    exit $rc
+    
+#    ls /scratch/$PBS_JOBID
+fi

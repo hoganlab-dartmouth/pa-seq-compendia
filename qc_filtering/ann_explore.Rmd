@@ -1,0 +1,40 @@
+---
+title: "R Notebook"
+output: html_notebook
+author: Georgia Doing georgia.doing.gr@dartmouth.edu
+date crated: 
+date modified: Sys.Date()
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages}
+filt_comp <- read.csv('qc-out/pa14_aligned_compendium_p2_filtered_counts_norm.csv', stringsAsFactors = F)
+run_table <- read.csv('../run_table/SraRunTable.csv', stringsAsFactors = F)
+ann_table <- read.csv('./StudyDataVF.csv', stringsAsFactors = F)
+```
+
+
+```{r, warning=F}
+spu_erxs <- run_table$Experiment[apply(run_table, 1, FUN = function(x) sum(grepl('sputum',x))) > 0]
+length(spu_erxs)
+spu_erxs[(paste(paste(spu_erxs,spu_erxs,sep='.'),'salmon',sep='.') %in% colnames(filt_comp))]
+View(run_table[run_table$Experiment %in% spu_erxs,])
+```
+
+```{r}
+unique(ann_table$Treatment)
+unique(ann_table$Genotype)
+grep('biofilm',unique(ann_table$Growth.Conditions))
+```
+
+## Background
+
+## Purpose
+
+## Outline
+
+## Reflections
