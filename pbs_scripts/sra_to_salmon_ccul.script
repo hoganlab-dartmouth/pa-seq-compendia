@@ -30,7 +30,7 @@
 #SBATCH --ntasks-per-node=6
 #SBATCH --mail-type=START,END,FAIL
 #SBATCH --mail-user=Georgia.Doing.GR@Dartmouth.edu
-#SBATCH --array=0-75
+#SBATCH --array=0-1 #75
 ##SBATCH --output=/dartfs-hpc/scratch/f002bx6/salmon/sra_comp/oe
 ##SBATCH --mem=128G
 ##SBATCH --hostlist=[k01-58]
