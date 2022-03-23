@@ -1,0 +1,34 @@
+#!/bin/bash -l
+
+################################################################################
+#Script Name: sal_logs_collect.pbs
+#Desription : collect salmon logs into matrices
+#Args       : dir, genome
+#Author     : Georgia Doing
+#Date       : 02-18-21
+#Email      : Georgia.Doing.GR@Dartmouth.edu
+################################################################################
+
+##PBS -q default
+#SBATCH --account NCCC
+#SBATCH --job-name=sal_logs_col
+#SBATCH --time=02:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=2
+##PBS -m bea
+#SBATCH --mail-user=Georgia.Doing.GR@Dartmouth.edu
+##PBS -j oe
+##PBS -e oe
+##PBS -o oe 
+
+
+cd $SLURM_SUBMIT_DIR
+
+sacct -j $1 --format=JobID,CPUTime,ExitCode,State,Elapsed,NTasks,TotalCPU,MaxDiskWrite,MaxDiskRead,MaxRSS,MaxVMSize,Start,End > /dartfs-hpc/scratch/f002bx6/salmon/pao1_cdna_k15/geo_comp/slurm_out.csv
+
+#sacct -j $2 --format=JobID,CPUTime,ExitCode,State,Elapsed,NTasks,TotalCPU,MaxDiskWrite,MaxDiskRead,MaxRss,MaxVMSize,Start,End > /dartfs-hpc/scratch/f002bx6/salmon/pa14_cdna_k15/geo_comp/slurm_out.csv
+
+#python  ../shape_comp/logs_collect2.py /dartfs-hpc/scratch/f002bx6/salmon/pa14_cdna_k15/geo_comp
+
+
+python  ../shape_comp/logs_collect2.py /dartfs-hpc/scratch/f002bx6/salmon/pao1_cdna_k15/geo_comp

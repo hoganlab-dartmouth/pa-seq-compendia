@@ -22,13 +22,14 @@
 ##PBS -o oe
 
 
+
 cd $SLURM_SUBMIT_DIR
 
-Rscript ../shape_comp/quant_collect_by_srp.R /dartfs-hpc/scratch/f002bx6/salmon/pao1_cdna_k15/geo_comp \
+Rscript ../shape_comp/quant_collect.R /dartfs-hpc/scratch/f002bx6/salmon/pao1_cdna_k15/sra_comp \
 ../shape_comp/pao1_asm676v1cdna_gene_names.csv \
-pao1_cdna_k15_geo.csv
+pao1_cdna_k15_cocul.csv
 
 
-Rscript ../shape_comp/quant_collect_by_srp.R /dartfs-hpc/scratch/f002bx6/salmon/pa14_cdna_k15/geo_comp \
+Rscript ../shape_comp/quant_collect.R /dartfs-hpc/scratch/f002bx6/salmon/pa14_cdna_k15/sra_comp \
 ../shape_comp/pa14_gene_names.csv \
-pa14_cdna_k15_geo.csv
+pa14_cdna_k15_cocul.csv

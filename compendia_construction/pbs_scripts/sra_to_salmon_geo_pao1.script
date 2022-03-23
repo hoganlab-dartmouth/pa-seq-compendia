@@ -21,16 +21,16 @@
 ##PBS -o /dartfs-hpc/scratch/f002bx6/salmon/sra_comp/oe
 ##PBS -l feature='cellk'
 
-#SBATCH --account NCCC
+##SBATCH --account NCCC
 ##SBATCH --partition=standard
 ##SBATCH --partition=bigmem
-#SBATCH --job-name s2sO1
+#SBATCH --job-name s2s
 #SBATCH --time=03:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=6
 #SBATCH --mail-type=START,END,FAIL
 #SBATCH --mail-user=Georgia.Doing.GR@Dartmouth.edu
-#SBATCH --array=0-143
+#SBATCH --array=0-10
 ##SBATCH --output=/dartfs-hpc/scratch/f002bx6/salmon/sra_comp/oe
 ##SBATCH --mem=128G
 ##SBATCH --hostlist=[k01-58]

@@ -1,0 +1,34 @@
+#!/bin/bash -l
+
+################################################################################
+#Script Name: sal_out_collect.pbs
+#Desription : collect salmon output into matrices
+#Args       : dir, genome, outfile suffix
+#Author     : Georgia Doing
+#Date       : 12-18-20
+#Email      : Georgia.Doing.GR@Dartmouth.edu
+################################################################################
+
+##PBS -q default
+#SBATCH --account NCCC
+#SBATCH --job-name=sal_out_col
+#SBATCH --time=02:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=2
+##PBS -m bea
+#SBATCH --mail-user=Georgia.Doing.GR@Dartmouth.edu
+##PBS -j oe
+##PBS -e oe
+##PBS -o oe
+
+
+cd $SLURM_SUBMIT_DIR
+
+Rscript ../shape_comp/quant_collect_by_srp_geo.R /dartfs-hpc/scratch/f002bx6/salmon/pao1_cdna_k15/geo_comp \
+../shape_comp/pao1_asm676v1cdna_gene_names.csv \
+pao1_cdna_k15_geo.csv
+
+
+#Rscript ../shape_comp/quant_collect_by_srp_geo.R /dartfs-hpc/scratch/f002bx6/salmon/pa14_cdna_k15/geo_comp \
+#../shape_comp/pa14_gene_names.csv \
+#pa14_cdna_k15_geo.csv

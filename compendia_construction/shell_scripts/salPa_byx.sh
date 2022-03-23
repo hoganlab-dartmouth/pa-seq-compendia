@@ -15,7 +15,7 @@
 
 # load modules
 module load sratoolkit
-conda activate salmon
+conda activate salmon2
 
 
 
@@ -23,20 +23,21 @@ conda activate salmon
 if du -hac -d 1 /dartfs-hpc/scratch/f002bx6/salmon/$2/$1/*.salmon ; then
     echo "/salmon/$2/$1 already processed"
     DT=$(date)
-    echo "Attempt $PBS_JOBID $DT" >> /dartfs-hpc/scratch/f002bx6/salmon/$2/$1/processes.log
-    rm -r /scratch/f002bx6/$PBS_JOBID
+    echo "Attempt $SLURM_ARRAY_JOB_ID[$SLURM_ARRAY_TASK_ID] $DT" >> /dartfs-hpc/scratch/f002bx6/salmon/$2/$1/processes.log
+    rm -r /scratch/f002bx6/$SLURM_JOB_ID
+    #rm -r /dartfs-hpc/scratch/f002bx6/salmon/$2/$1
     exit 200
 fi
 
 
 mkdir -p /dartfs-hpc/scratch/f002bx6/salmon/$2/$1
 DT=$(date)
-echo "Processed $PBS_JOBID $DT" > /dartfs-hpc/scratch/f002bx6/salmon/$2/$1/processes.log
+echo "Processed $SLURM_ARRAY_JOB_ID[$SLURM_ARRAY_TASK_ID] $DT" > /dartfs-hpc/scratch/f002bx6/salmon/$2/$1/processes.log
 
 #echo ls /dartfs-hpc/scratch/f002bx6/salmon/$2/$1/
 # create temp dirs on local scratch
-mkdir -p /scratch/f002bx6/$PBS_JOBID/salmon_out/$2
-mkdir -p /scratch/f002bx6/$PBS_JOBID/sra_out/$1
+mkdir -p /scratch/f002bx6/$SLURM_JOB_ID/salmon_out/$2
+mkdir -p /scratch/f002bx6/$SLURM_JOB_ID/sra_out/$1
 
 # read in sra run accessions
 readarray SRFILES < <(find $1 -type f -regex ".*txt")
@@ -49,7 +50,7 @@ echo ${SRRS}
 # download each sra run, one at a time
 for f in $SRRS
 do
-    if ! fasterq-dump $f -O /scratch/f002bx6/$PBS_JOBID/sra_out/$1 -t /scratch/f002bx6/$PBS_JOBID/sra_out/tmp -f ; then
+    if ! fasterq-dump $f -O /scratch/f002bx6/$SLURM_JOB_ID/sra_out/$1 -t /scratch/f002bx6/$SLURM_JOB_ID/sra_out/tmp -f ; then
         echo "fasterq-dump failed on $f"
         exit 201
     fi
@@ -57,7 +58,7 @@ done
 
 # read in fastq files and run together
 #FQFILES=(/scratch/$PBS_JOBID/sra_out/$1/*)
-readarray FQFILES < <(find /scratch/f002bx6/$PBS_JOBID/sra_out/$1 -type f -regex ".*fastq")
+readarray FQFILES < <(find /scratch/f002bx6/$SLURM_JOB_ID/sra_out/$1 -type f -regex ".*fastq")
 echo FQFILES:
 echo ${FQFILES[*]}
 
@@ -75,19 +76,19 @@ salmon quant -i  ../t_indxs/$2 \
     --seqBias \
     -l A \
     -r ${FQFILES[*]} \
-    -o /scratch/f002bx6/$PBS_JOBID/salmon_out/$2/$1.salmon
+    -o /scratch/f002bx6/$SLURM_JOB_ID/salmon_out/$2/$1.salmon
 then
     echo 'salmon failed'
     exit 202
 fi
 # move from local scratch to dartfs scratch
 #mkdir -p /dartfs-hpc/scratch/f002bx6/salmon/$2/$1
-cp -r /scratch/f002bx6/$PBS_JOBID/salmon_out/$2/$1.salmon /dartfs-hpc/scratch/f002bx6/salmon/$2/$1/
+cp -r /scratch/f002bx6/$SLURM_JOB_ID/salmon_out/$2/$1.salmon /dartfs-hpc/scratch/f002bx6/salmon/$2/$1/
 
 # cleanup
-du -h --max-depth 0 /scratch/f002bx6/$PBS_JOBID
-rm -r /scratch/f002bx6/$PBS_JOBID
-[ ! -e /scratch/f002bx6/$PBS_JOBID ] && echo "/scratch/f002bx6/$PBS_JOBID deleted"
+du -h --max-depth 0 /scratch/f002bx6/$SLURM_JOB_ID
+rm -r /scratch/f002bx6/$SLURM_JOB_ID
+[ ! -e /scratch/f002bx6/$SLURM_JOB_ID ] && echo "/scratch/f002bx6/$SLURM_JOB_ID deleted"
 
 
 exit

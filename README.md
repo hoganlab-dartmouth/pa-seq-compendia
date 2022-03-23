@@ -1,73 +1,43 @@
-# pa-seq-compendia
+# Computationally efficient assembly of a *Pseudomonas aeruginosa* gene expression compendium
 
-To build compendia of publicly available RNAseq data for *P. aeruginosa*, specifically.
+This repository contains scripts used to build compendia of publicly available RNAseq data for *Pseudomonas aeruginosa*.
 
-This short pipeline (collection of bash scripts) is written to download *P. aeruginosa*
-RNAseq data from the NBCI SRA database and process them with salmon. It works off-of
-a pre-downloaded SRA run table and pre-determined salmon parameters.
+The construction and composition of these compendia is documented in [Doing et al. 2022](https://doi.org/10.1101/2022.01.24.477642).
 
-Before using the PBS script, the headers will need to be altered to run through a specific user
-account on Dartmouth's discovery cluster and/or dirs in bash scripts will need to be
-restructured.
+Required input files and the main output files like [raw](https://osf.io/mn7tj/) and [normalized compendia](https://osf.io/vz42h/) are stored on OSF: https://osf.io/s9gyu/
 
-## Installation
+The compendia were originally constructed using a collection of bash, python, and R scripts which are documented in `compendia_construction`. 
+This pipeline required a pre-downloaded [SRA run table](https://osf.io/pt7am/) which was used to download FASTQ files of RNAseq data using `fasterq-dump`.
+These files were then mapped against *P. aeruginosa* transcriptomes using salmon, and counts were post-processed in R and python.
 
-If these scripts are run locally they require the SRAtoolkit and salmon.
-These software packages can be installed using miniconda.
-
-All software necessary has been installed on discovery by admin.
-
-All related files are stored on OSF: https://osf.io/s9gyu/
-
-## Usage
-
-1. Upload a run table from the SRA to the working dir (e.g. use `scp` or `rsync` to upload the file if working on a remote computer).
-2. Use the R script `run_table/run_table_dirs.R` to make the required directories for compendia processing. This script requires a run table from SRA.
-3. Create a *P. aeruginosa* transcriptome index.
-```
-salmon index -t ./t_indxs/pao1_cnda.fa.gz -i ./t_indxs/pao1_cdna_k15 -k 15
-```
-
-4. Process samples in the dir against the transcriptome index.
-```
-mksub sra_to_salmon.pbs
-```
-or
-```
-./shell_scripts/sra2sal_byx.sh 1 # will fun first experiment found in sra_comp/
-```
-Iterate between the following scripts until all samples have sucessfully run
-```
-./pbs_scripts/collect_jobIDs.pbs
-./pbs_scripts/collected_IDs_jobs.pbs
-```
-5. Collect salmon output and log data using the following scripts:
-```
-shape_comp/gene_names.R
-shape_comp/quant_collect.R
-shape_comp/logs_collect.py
-```
-
-6. Download the processed data (e.g. using `scp` or `rsync`).
+To facilitate the addition of new RNAseq samples to the compendia, we have provided an automated pipeline that will process new SRA experiment accessions, add the new counts to the original raw compendia, and re-filter and re-normalize the compendia. 
+This pipeline is provided in `auto_add_to_compendia`.
+This pipeline automates the bash, R, and python scripts provided in `compendia_construction` with minor modifications to the original code. 
 
 ## Support
 
-Georgia.Doing.GR@Dartmouth.edu
+Please submit an issue to the issue tracker. 
 
 ## Roadmap
 
-This is a proof-of-principle project that could help set the stage for
-a versatile, scaleable pipeline.
-
-## Contributing
+This is a proof-of-principle project that could help set the stage for a versatile, scaleable pipeline.
 
 ## Authors
 
-Georgia Doing (@georgiadoing)
+Georgia Doing (@georgiadoing), Taylor Reiter (@taylorreiter)
+
 ## License
 
-tba
+See the LICENSE file above.
 
 ## Status
 
-development
+Complete.
+
+## Citation
+
+Please cite
+
+Computationally efficient assembly of a Pseudomonas aeruginosa gene expression compendium
+Georgia Doing, Alexandra J. Lee, Samuel L. Neff, Jacob D. Holt, Bruce A. Stanton, Casey S. Greene, Deborah A. Hogan
+bioRxiv 2022.01.24.477642; doi: https://doi.org/10.1101/2022.01.24.477642 
