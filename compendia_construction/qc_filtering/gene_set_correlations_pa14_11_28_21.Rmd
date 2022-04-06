@@ -1,0 +1,722 @@
+---
+title: "RNAseq compendium filtering validation"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+### Setup
+
+```{r, warning=FALSE, message=F}
+library(RVenn)
+library(Rtsne)
+library(umap)
+library(reshape2)
+library(ggplot2)
+library(ADAGEpath)
+library(preprocessCore)
+library(ggvenn)
+library(RColorBrewer)
+library(cowplot)
+library(pheatmap)
+library(ComplexHeatmap)
+library(corrplot)
+library(edgeR)
+library(DESeq2)
+library(ggprism)
+library(plotrix)
+library(Rmisc)
+source('~/Dropbox (Hogan Lab)/Resources/Annotations/annotation_functions.R')
+source('~/Dropbox (Hogan Lab)/Resources/Scripts/fsqn.R')
+```
+
+
+### Load data
+
+Load full and progressively filtered versions of the RNAseq compendium as well as the array compendium for reference.
+
+```{r}
+
+
+## full
+rnaseq_comp_full <- read.csv('compendia/TPM_pa14_cdna_k15.csv', stringsAsFactors = F, row.names = 2)
+rownames(rnaseq_comp_full) <- make.unique(sapply(rownames(rnaseq_comp_full), function(x) PA14_to_PAO1(x)))
+rnaseq_comp_counts_full <- read.csv('compendia/num_reads_pa14_cdna_k15.csv', stringsAsFactors = F, row.names = 2)
+rownames(rnaseq_comp_counts_full) <- make.unique(sapply(rownames(rnaseq_comp_counts_full), function(x) PA14_to_PAO1(x)))
+
+# filtered at 0.2
+rnaseq_comp_p2 <- read.csv('filtered_compendia/jor_pa14_aligned_rnaseq_compendium_filtered_tpm_zp2.csv', stringsAsFactors = F, row.names = 1)
+rownames(rnaseq_comp_p2) <- make.unique(sapply(rownames(rnaseq_comp_p2), function(x) PA14_to_PAO1(x)))
+
+rnaseq_comp_counts_p2 <- read.csv('filtered_compendia/jor_pa14_aligned_rnaseq_compendium_filtered_counts_zp2.csv', stringsAsFactors = F, row.names = 1)
+rownames(rnaseq_comp_counts_p2) <- make.unique(sapply(rownames(rnaseq_comp_counts_p2), function(x) PA14_to_PAO1(x)))
+
+rnaseq_comp_counts_p2_QC_out_file <- read.csv('../2021_06_24_pa-seq-compendia/pa-seq-compendia/qc_filtering/filtered_compendia/pa14_aligned_rnaseq_compendium_zp2_MRnorm.csv', stringsAsFactors = F, row.names = 1)
+
+
+# filtered at 0.7
+rnaseq_comp_p7 <- read.csv('filtered_compendia/jor_pa14_aligned_rnaseq_compendium_filtered_tpm_zp7.csv', stringsAsFactors = F, row.names = 1)
+rownames(rnaseq_comp_p7) <- make.unique(sapply(rownames(rnaseq_comp_p7), function(x) PA14_to_PAO1(x)))
+rnaseq_comp_counts_p7 <- read.csv('filtered_compendia/jor_pa14_aligned_rnaseq_compendium_filtered_counts_zp7.csv', stringsAsFactors = F, row.names = 1)
+rownames(rnaseq_comp_counts_p7) <- make.unique(sapply(rownames(rnaseq_comp_counts_p7), function(x) PA14_to_PAO1(x)))
+
+
+array_comp <- read.csv('compendia/Pa_compendium_02_22_2014.csv', stringsAsFactors = F, sep='\t', row.names = 1)
+
+
+
+data_dfs <- list(rnaseq_comp_full,rnaseq_comp_p2,rnaseq_comp_p7, array_comp)
+
+data_genes <- lapply(data_dfs, function(x) rownames(x))
+genes_venn <- Venn(data_genes)
+common_genes <- overlap(genes_venn)
+
+
+
+
+
+```
+
+## EdgeR
+```{r}
+y <- DGEList(counts = rnaseq_comp_counts_full[,-1], genes = rownames(rnaseq_comp_counts_full))
+y$samples$lib.size <- colSums(y$counts)
+y <- calcNormFactors(y)
+y_norm <- cpm(y)
+```
+## DESeq2
+```{r}
+meta <- data.frame(experiment = colnames(rnaseq_comp_counts_p2))
+dds <- DESeqDataSetFromMatrix(countData = ceiling(rnaseq_comp_counts_p2)+1, colData = meta, design = ~ experiment)
+dds <- estimateSizeFactors(dds)
+normalized_counts <- counts(dds, normalized=TRUE)
+```
+
+
+```{r}
+array_comp_log <- log(data.matrix(array_comp))
+array_comp_log[array_comp_log == -Inf] <- 0
+rnaseq_comp_counts_full_log <- log(data.matrix(rnaseq_comp_counts_full[,-1]))
+rnaseq_comp_counts_full_log[rnaseq_comp_counts_full_log == -Inf] <- 0
+rnaseq_comp_full_log <- log(data.matrix(rnaseq_comp_full[,-1]))
+rnaseq_comp_full_log[rnaseq_comp_full_log == -Inf] <- 0
+rnaseq_comp_p2_log <- log(data.matrix(rnaseq_comp_p2[,-1]))
+rnaseq_comp_p2_log[rnaseq_comp_p2_log == -Inf] <- 0
+rnaseq_comp_tmm_log <- log(data.matrix(y_norm))
+rnaseq_comp_tmm_log[rnaseq_comp_tmm_log == -Inf] <- 0
+rnaseq_comp_mr_log <- log(data.matrix(normalized_counts))
+rnaseq_comp_mr_log[rnaseq_comp_mr_log == -Inf] <- 0
+
+
+```
+
+```{r}
+data_list <- list('array' = array_comp_log,
+                  'counts_rnaseq' = rnaseq_comp_counts_full_log,
+                  'full_rnaseq' = rnaseq_comp_full_log,
+                  'p2_rnaseq' = rnaseq_comp_p2_log,
+                  'tmm_rnaseq' = rnaseq_comp_tmm_log,
+                  'mr_rnaseq' = rnaseq_comp_mr_log
+  
+)
+
+data_genes <- lapply(data_list, function(x) rownames(x))
+genes_venn <- Venn(data_genes)
+common_genes <- overlap(genes_venn)
+```
+
+## By Regulon instead of Signature
+
+```{r load_regs}
+regs <- read.csv('~/Dropbox (Hogan Lab)/Resources/Regulons/gene_sets_format.csv', stringsAsFactors = F, sep=',')
+opes <- read.csv('~/Dropbox (Hogan Lab)/Resources/Regulons/operons_format.csv', stringsAsFactors = F, sep=',')
+regp <- read.csv('~/Dropbox (Hogan Lab)/Resources/Regulons/regprecise_format.txt', stringsAsFactors = F, sep='\t')
+```
+
+```{r}
+
+c_method <- "pearson" 
+data_corr_list <- lapply(data_list, function(x) data.frame(cor(t(x), method=c_method)) )
+
+```
+
+
+```{r calc_corrs_regs}
+
+regs_data_corrs <- lapply(regs$Genes, function(x){
+  if(!is.na(x[1])){
+  genes <- unlist(strsplit(x,';'))
+  genes <- genes[genes %in% common_genes]
+  genes_r <- sample(common_genes, length(genes))
+  cors_list <- lapply(data_corr_list, function(y){
+    list( regs = y[genes,genes], rand = y[genes_r,genes_r])
+    })
+  }
+})
+names(regs_data_corrs) <- regs$Regulon
+```
+
+```{r}
+opes_data_corrs <- lapply(opes$Genes, function(x){
+  if(!is.na(x[1])){
+  genes <- unlist(strsplit(x,';'))
+  genes <- genes[genes %in% common_genes]
+  genes_r <- sample(common_genes, length(genes))
+  cors_list <- lapply(data_corr_list, function(y){
+    list( regs = y[genes,genes], rand = y[genes_r,genes_r])
+    })
+  }
+})
+names(opes_data_corrs) <- opes$OperonID
+```
+
+```{r}
+
+regp_data_corrs <- lapply(regp$Genes, function(x){
+  if(!is.na(x[1])){
+  genes <- unlist(strsplit(x,';'))
+  genes <- genes[genes %in% common_genes]
+  genes_r <- sample(common_genes, length(genes))
+  cors_list <- lapply(data_corr_list, function(y){
+    list( regs = y[genes,genes], rand = y[genes_r,genes_r])
+    })
+  }
+})
+names(regp_data_corrs) <- regp$Regulon
+```
+
+```{r, warning=F, error=F, output=F}
+cors_names <- names(regs_data_corrs[[1]])
+
+regs_names <- unlist(lapply(names(regs_data_corrs), function(x) rep(x, sum(lower.tri(regs_data_corrs[[x]][[1]][[1]])))))
+opes_names <- unlist(lapply(names(opes_data_corrs), function(x) rep(x, sum(lower.tri(opes_data_corrs[[x]][[1]][[1]])))))
+regp_names <- unlist(lapply(names(regp_data_corrs), function(x) rep(x, sum(lower.tri(regp_data_corrs[[x]][[1]][[1]])))))
+
+
+unlists_regs <- lapply(cors_names, function(y){
+  temp_corrs_pool <- unlist(lapply(regs_data_corrs, function(x) unlist(x[[y]][['regs']][lower.tri(x[[y]][['regs']])])))
+  temp_corrs_rand_pool <- unlist(lapply(regs_data_corrs, function(x) unlist(x[[y]][['rand']][lower.tri(x[[y]][['rand']])])))
+  data.frame('reg' = temp_corrs_pool, 'rand' = temp_corrs_rand_pool, 'comp' = rep(y,length(temp_corrs_pool)), 'reg_name' = regs_names)
+  }
+)
+
+unlist_regs_df <- do.call(rbind,unlists_regs)
+
+unlists_opes <- lapply(cors_names, function(y){
+  temp_corrs_pool <- unlist(lapply(opes_data_corrs, function(x) unlist(x[[y]][['regs']][lower.tri(x[[y]][['regs']])])))
+  temp_corrs_rand_pool <- unlist(lapply(opes_data_corrs, function(x) unlist(x[[y]][['rand']][lower.tri(x[[y]][['rand']])])))
+  data.frame('reg' = temp_corrs_pool, 'rand' = temp_corrs_rand_pool, 'comp' = rep(y,length(temp_corrs_pool)), 'reg_name' = opes_names)
+  }
+)
+
+unlist_opes_df <- do.call(rbind,unlists_opes)
+
+
+
+unlists_regp <- lapply(cors_names, function(y){
+  temp_corrs_pool <- unlist(lapply(regp_data_corrs, function(x) unlist(x[[y]][['regs']][lower.tri(x[[y]][['regs']])])))
+  temp_corrs_rand_pool <- unlist(lapply(regp_data_corrs, function(x) unlist(x[[y]][['rand']][lower.tri(x[[y]][['rand']])])))
+  data.frame('reg' = temp_corrs_pool, 'rand' = temp_corrs_rand_pool, 'comp' = rep(y,length(temp_corrs_pool)), 'reg_name' = regp_names)
+  }
+)
+
+unlist_regp_df <- do.call(rbind,unlists_regp)
+
+```
+
+## summary stats
+
+```{r, warning=F, error=F, output=F}
+regs_for_t <- c('Anr_regulon','Dnr_regulon','PhoB_regulon','AlgU_regulon',
+                'LasR_regulon','RhlR_regulon','PqsR_regulon','QscR_regulon',
+                'VreI_regulon','PA2093_regulon','GbdR_regulon','LldR_regulon',
+                'OspR_regulon','PsrA_regulon','CbrB_regulon','CrcZ_regulon',
+                'Crc_regulon','LexA_regulon','ErdR_regulon','SoxR_regulon',
+                'PhhR_regulon','RpoS_regulon','Fur_regulon','PvdS_regulon',
+                'PhoP_regulon','PmrA_regulon')
+
+lapply(unique(unlist_regs_df$comp), function(c){
+  stat_test <- (unlist_regs_df[unlist_regs_df$comp == c,] %>% melt %>%
+    rstatix::group_by(reg_name) %>% 
+    rstatix::pairwise_t_test(value ~ variable, paired=F, 
+                           p.adjust.method = "BH", detailed = T))
+  rownames(stat_test) <- stat_test$reg_name
+  
+regs_stats <- data.frame(
+  'Regulon' = regs_for_t,
+  'Size' =  unlist(sapply(regs_for_t, function(x) if(x %in% regs$Regulon){
+    regs$Lengths[regs$Regulon == x]} else{0})),
+  'Mean' = tapply(unlist_regs_df$reg[unlist_regs_df$comp == c], 
+                  unlist_regs_df$reg_name[unlist_regs_df$comp == c],
+                  function(x) mean(x))[regs_for_t],
+  'Median' = tapply(unlist_regs_df$reg[unlist_regs_df$comp == c],
+                    unlist_regs_df$reg_name[unlist_regs_df$comp == c],
+                    function(x) median(x))[regs_for_t],
+  'SD' = tapply(unlist_regs_df$reg[unlist_regs_df$comp == c],
+                unlist_regs_df$reg_name[unlist_regs_df$comp == c],
+                function(x) sd(x))[regs_for_t],
+    'SE' = tapply(unlist_regs_df$reg[unlist_regs_df$comp == c],
+                unlist_regs_df$reg_name[unlist_regs_df$comp == c],
+                function(x) std.error(x))[regs_for_t],
+      'CI_upper' = tapply(unlist_regs_df$reg[unlist_regs_df$comp == c],
+                unlist_regs_df$reg_name[unlist_regs_df$comp == c],
+                function(x) CI(x)[1])[regs_for_t],
+        'CI_lower' = tapply(unlist_regs_df$reg[unlist_regs_df$comp == c],
+                unlist_regs_df$reg_name[unlist_regs_df$comp == c],
+                function(x) CI(x)[3])[regs_for_t],
+  'Rand_Mean' = tapply(unlist_regs_df$rand[unlist_regs_df$comp == c],
+                       unlist_regs_df$reg_name[unlist_regs_df$comp == c],
+                       function(x) mean(x))[regs_for_t],
+  'Rand_Median' = tapply(unlist_regs_df$rand[unlist_regs_df$comp == c],
+                         unlist_regs_df$reg_name[unlist_regs_df$comp == c],
+                         function(x) median(x))[regs_for_t],
+  'Rand_SD' = tapply(unlist_regs_df$rand[unlist_regs_df$comp == c],
+                     unlist_regs_df$reg_name[unlist_regs_df$comp == c],
+                     function(x) sd(x))[regs_for_t],
+    'Rand_SE' = tapply(unlist_regs_df$rand[unlist_regs_df$comp == c],
+                     unlist_regs_df$reg_name[unlist_regs_df$comp == c],
+                     function(x) std.error(x))[regs_for_t],
+      'Rand_CI_upper' = tapply(unlist_regs_df$rand[unlist_regs_df$comp == c],
+                     unlist_regs_df$reg_name[unlist_regs_df$comp == c],
+                     function(x) CI(x)[1])[regs_for_t],
+      'Rand_CI_lower' = tapply(unlist_regs_df$rand[unlist_regs_df$comp == c],
+                     unlist_regs_df$reg_name[unlist_regs_df$comp == c],
+                     function(x) CI(x)[3])[regs_for_t],
+  'Adj.Pval' =  as.data.frame(stat_test)[regs_for_t,'p.adj']
+)
+regs_stats[,'Mean (SE)'] <- paste0(paste(signif(regs_stats$Mean, digits=2),
+                                  signif(regs_stats$SE, digits=2), sep=' ('),')')
+regs_stats[,'Rand Mean (SE)'] <- paste0(paste(signif(regs_stats$Rand_Mean, digits=2),
+                                  signif(regs_stats$Rand_SE, digits=2), sep=' ('),')')
+
+write.csv(regs_stats,paste0(c,'_regs_corr_stats_pa14.csv'))
+})
+
+lapply(unique(unlist_regp_df$comp), function(c){
+  stat_test <- as.data.frame(unlist_regp_df[unlist_regp_df$comp == c,] %>% melt %>%
+    rstatix::group_by(reg_name) %>% 
+    rstatix::pairwise_t_test(value ~ variable, paired=F, 
+                           p.adjust.method = "BH", detailed = T))
+  rownames(stat_test) <- stat_test$reg_name
+  regp_names <- rownames(tapply(unlist_regp_df$reg[unlist_regp_df$comp == c], 
+                  unlist_regp_df$reg_name[unlist_regp_df$comp == c],
+                  function(x) mean(x)))
+regsp_stats <- data.frame(
+  #'Regulon' = unique(unlist_regp_df$reg_name),
+    'Size' = unlist(sapply(regp_names, function(x) if(x %in% regp$Regulon){
+    regp$Length[regp$Regulon == x]} else{0})),
+  'Mean' = tapply(unlist_regp_df$reg[unlist_regp_df$comp == c], 
+                  unlist_regp_df$reg_name[unlist_regp_df$comp == c],
+                  function(x) mean(x)),
+  'Median' = tapply(unlist_regp_df$reg[unlist_regp_df$comp == c],
+                    unlist_regp_df$reg_name[unlist_regp_df$comp == c],
+                    function(x) median(x)),
+  'SD' = tapply(unlist_regp_df$reg[unlist_regp_df$comp == c],
+                unlist_regp_df$reg_name[unlist_regp_df$comp == c],
+                function(x) sd(x)),
+    'SE' = tapply(unlist_regp_df$reg[unlist_regp_df$comp == c],
+                unlist_regp_df$reg_name[unlist_regp_df$comp == c],
+                function(x) std.error(x)),
+    'CI_upper' = tapply(unlist_regp_df$reg[unlist_regp_df$comp == c],
+                unlist_regp_df$reg_name[unlist_regp_df$comp == c],
+                function(x) CI(x)[1]),
+    'CI_lower' = tapply(unlist_regp_df$reg[unlist_regp_df$comp == c],
+                unlist_regp_df$reg_name[unlist_regp_df$comp == c],
+                function(x) CI(x)[3]),
+  'Rand_Mean' = tapply(unlist_regp_df$rand[unlist_regp_df$comp == c],
+                       unlist_regp_df$reg_name[unlist_regp_df$comp == c],
+                       function(x) mean(x)),
+  'Rand_Median' = tapply(unlist_regp_df$rand[unlist_regp_df$comp == c],
+                         unlist_regp_df$reg_name[unlist_regp_df$comp == c],
+                         function(x) median(x)),
+  'Rand_SD' = tapply(unlist_regp_df$rand[unlist_regp_df$comp == c],
+                     unlist_regp_df$reg_name[unlist_regp_df$comp == c],
+                     function(x) sd(x)),
+    'Rand_SE' = tapply(unlist_regp_df$rand[unlist_regp_df$comp == c],
+                     unlist_regp_df$reg_name[unlist_regp_df$comp == c],
+                     function(x) std.error(x)),
+    'Rand_CI_upper' = tapply(unlist_regp_df$rand[unlist_regp_df$comp == c],
+                     unlist_regp_df$reg_name[unlist_regp_df$comp == c],
+                     function(x) CI(x)[1]),
+    'Rand_CI_lower' = tapply(unlist_regp_df$rand[unlist_regp_df$comp == c],
+                     unlist_regp_df$reg_name[unlist_regp_df$comp == c],
+                     function(x) CI(x)[3]),
+  'Adj.Pval' =  stat_test[regp_names,'p.adj']
+)
+regsp_stats[,'Mean (SE)'] <- paste0(paste(signif(regsp_stats$Mean, digits=2),
+                                  signif(regsp_stats$SE, digits=2), sep=' ('),')')
+regsp_stats[,'Rand Mean (SE)'] <- paste0(paste(signif(regsp_stats$Rand_Mean, digits=2),
+                                  signif(regsp_stats$Rand_SE, digits=2), sep=' ('),')')
+write.csv(regsp_stats,paste0(c,'_reg_precise_corr_stats_pa14.csv'))
+})
+
+lapply(unique(unlist_opes_df$comp), function(c){
+  stat_test <- as.data.frame(unlist_opes_df[unlist_opes_df$comp == c,] %>% melt %>%
+    rstatix::group_by(reg_name) %>% 
+    rstatix::pairwise_t_test(value ~ variable, paired=F, 
+                           p.adjust.method = "BH", detailed = T))
+  rownames(stat_test) <- stat_test$reg_name
+  regp_names <- rownames(tapply(unlist_opes_df$reg[unlist_opes_df$comp == c], 
+                  unlist_opes_df$reg_name[unlist_opes_df$comp == c],
+                  function(x) mean(x)))
+ops_stats <- data.frame(
+  #'Regulon' = unique(unlist_opes_df$reg_name),
+    'Size' = unlist(sapply(regp_names, function(x) if(x %in% regp$Regulon){
+    regp$Length[regp$Regulon == x]} else{0})),
+  'Mean' = tapply(unlist_opes_df$reg[unlist_opes_df$comp == c],
+                  unlist_opes_df$reg_name[unlist_opes_df$comp == c], 
+                  function(x) mean(x)),
+  'Median' = tapply(unlist_opes_df$reg[unlist_opes_df$comp == c],
+                    unlist_opes_df$reg_name[unlist_opes_df$comp == c],
+                    function(x) median(x)),
+  'SD' = tapply(unlist_opes_df$reg[unlist_opes_df$comp == c],
+                unlist_opes_df$reg_name[unlist_opes_df$comp == c],
+                function(x) sd(x)),
+    'SE' = tapply(unlist_opes_df$reg[unlist_opes_df$comp == c],
+                unlist_opes_df$reg_name[unlist_opes_df$comp == c],
+                function(x) std.error(x)),
+    'CI_upper' = tapply(unlist_opes_df$reg[unlist_opes_df$comp == c],
+                unlist_opes_df$reg_name[unlist_opes_df$comp == c],
+                function(x) CI(x)[1]),
+    'CI_lower' = tapply(unlist_opes_df$reg[unlist_opes_df$comp == c],
+                unlist_opes_df$reg_name[unlist_opes_df$comp == c],
+                function(x) CI(x)[3]),
+  'Rand_Mean' = tapply(unlist_opes_df$rand[unlist_opes_df$comp == c],
+                       unlist_opes_df$reg_name[unlist_opes_df$comp == c],
+                       function(x) mean(x)),
+  'Rand_Median' = tapply(unlist_opes_df$rand[unlist_opes_df$comp == c],
+                         unlist_opes_df$reg_name[unlist_opes_df$comp == c],
+                         function(x) median(x)),
+  'Rand_SD' = tapply(unlist_opes_df$rand[unlist_opes_df$comp == c],
+                     unlist_opes_df$reg_name[unlist_opes_df$comp == c],
+                     function(x) sd(x)),
+    'Rand_SE' = tapply(unlist_opes_df$rand[unlist_opes_df$comp == c],
+                     unlist_opes_df$reg_name[unlist_opes_df$comp == c],
+                     function(x) std.error(x)),
+    'Rand_CI_upper' = tapply(unlist_opes_df$rand[unlist_opes_df$comp == c],
+                     unlist_opes_df$reg_name[unlist_opes_df$comp == c],
+                     function(x) CI(x)[1]),
+    'Rand_CI_lower' = tapply(unlist_opes_df$rand[unlist_opes_df$comp == c],
+                     unlist_opes_df$reg_name[unlist_opes_df$comp == c],
+                     function(x) CI(x)[3]),
+  'Adj.Pval' =  stat_test[regp_names ,'p.adj']
+)
+
+ops_stats[,'Mean (SE)'] <- paste0(paste(signif(ops_stats$Mean, digits=2),
+                                  signif(ops_stats$SE, digits=2), sep=' ('),')')
+ops_stats[,'Rand Mean (SE)'] <- paste0(paste(signif(ops_stats$Rand_Mean, digits=2),
+                                  signif(ops_stats$Rand_SE, digits=2), sep=' ('),')')
+write.csv(ops_stats,paste0(c,'_operons_corr_stats_pa14.csv'))
+})
+```
+
+```{r}
+#df_p_valf <- plot_temp_names[plot_temp_names$comp == 'array',] %>% melt %>%
+#  rstatix::group_by(reg_name) %>% 
+#  rstatix::pairwise_t_test(value ~ variable, paired=T, p.adjust.method = "BH", detailed = T)
+
+
+```
+
+
+## Plots
+
+
+```{r, fig.height=6, fig.width=4}
+plot_temp <- unlist_regs_df #[unlist_regs_df$comp %in% c('array_log01_da','rnaseq_log01_byg_da', 'rnaseq_log01_bya_da','rnaseq_log01_bys_da'),]
+plot_temp_filt <- plot_temp[plot_temp$reg < 1 & plot_temp$rand < 1,]
+plot_temp_names <- plot_temp_filt #%>% mutate(comp = recode(comp, 'array_cors' = "Array", 
+                                  #                    "seqf_cors" = "RNAseq \n (unfiltered)", 
+                                   #                   "seq2_cors" = "RNAseq \n (some filtering)", 
+                                   #                   "seq7_cors" = "RNAseq \n (more filtering)"))
+
+plot_temp_names$comp <- factor(plot_temp_names$comp, levels = names(data_list))
+
+#regs_meds <- summarise(group_by(melt(plot_temp_names),reg_name,comp, variable),median(value))
+#colnames(regs_meds) <- c('reg','comp','data','median')
+
+#df_p_val <- regs_meds %>% 
+#  rstatix::group_by(comp) %>% 
+#  rstatix::pairwise_t_test(median ~ data, paired=T, p.adjust.method = "bonferroni",
+#                           detailed = F) #%>% 
+#  rstatix::add_xy_position()
+
+#df_p_valf <- plot_temp_names %>% melt %>%
+#  rstatix::group_by(comp) %>% 
+#  rstatix::pairwise_t_test(value ~ variable, paired=T, p.adjust.method = "BH") #%>% 
+  #rstatix::add_xy_position()
+
+
+
+g_reg <- ggplot(plot_temp_names) +
+  geom_density( aes(x=reg, y = ..density..), fill = 'black') +
+  geom_density( aes(x=rand, y = -..density..), fill ='grey', color='grey') +
+  geom_vline(aes(xintercept=0), color = 'dark grey', linetype="dashed") +
+  stat_summary( aes(x=0, y = reg, xintercept=stat(y)), fun=mean,  geom="vline", linetype='dashed', color = '#895881', size=1.5) + 
+  scale_color_gradient(low = 'yellow', high = 'red') +
+  stat_summary( aes(x=0, y = rand, xintercept=stat(y)), fun=mean,  geom="vline", color='#89A45E', linetype='dashed', size=1.5) + 
+  facet_grid( rows = vars(comp)) + #,cols=vars(reg_name)
+  labs( x = "Pearson's Correlation Coefficient") +
+  theme_bw() + theme_prism(base_fontface = 'plain', base_line_size = 0.5)
+g_reg #+ add_pvalue(df_p_valf,y.position=1)
+
+ggsave('pearson_dists_comps_filter_norm_prism_plot_PA14.png', width=6, height=8)
+ggsave('pearson_dists_comps_filter_norm_prism_plot_PA14.svg', width=6, height=8)
+```
+
+```{r, fig.height=6, fig.width=4}
+plot_temp <- unlist_opes_df #[unlist_regs_df$comp %in% c('array_log01_da','rnaseq_log01_byg_da', 'rnaseq_log01_bya_da','rnaseq_log01_bys_da'),]
+plot_temp_filt <- plot_temp[plot_temp$reg < 1 & plot_temp$rand < 1,]
+plot_temp_names <- plot_temp_filt #%>% mutate(comp = recode(comp, 'array_cors' = "Array", 
+                                  #                    "seqf_cors" = "RNAseq \n (unfiltered)", 
+                                   #                   "seq2_cors" = "RNAseq \n (some filtering)", 
+                                   #                   "seq7_cors" = "RNAseq \n (more filtering)"))
+
+plot_temp_names$comp <- factor(plot_temp_names$comp, levels = names(data_list))
+
+#regs_meds <- summarise(group_by(melt(plot_temp_names),reg_name,comp, variable),median(value))
+#colnames(regs_meds) <- c('reg','comp','data','median')
+
+#df_p_val <- regs_meds %>% 
+#  rstatix::group_by(comp) %>% 
+#  rstatix::pairwise_t_test(median ~ data, paired=T, p.adjust.method = "bonferroni",
+#                           detailed = F) #%>% 
+#  rstatix::add_xy_position()
+
+#df_p_valf <- plot_temp_names %>% melt %>%
+#  rstatix::group_by(comp) %>% 
+#  rstatix::pairwise_t_test(value ~ variable, paired=T, p.adjust.method = "BH") #%>% 
+  #rstatix::add_xy_position()
+
+
+
+g_reg <- ggplot(plot_temp_names) +
+  geom_density( aes(x=reg, y = ..density..), fill = 'black') +
+  geom_density( aes(x=rand, y = -..density..), fill ='grey', color='grey') +
+  geom_vline(aes(xintercept=0), color = 'dark grey', linetype="dashed") +
+  stat_summary( aes(x=0, y = reg, xintercept=stat(y)), fun=mean,  geom="vline", linetype='dashed', color = '#895881', size=1.5) + 
+  scale_color_gradient(low = 'yellow', high = 'red') +
+  stat_summary( aes(x=0, y = rand, xintercept=stat(y)), fun=mean,  geom="vline", color='#89A45E', linetype='dashed', size=1.5) + 
+  facet_grid( rows = vars(comp)) + #,cols=vars(reg_name)
+  labs( x = "Pearson's Correlation Coefficient") +
+  theme_bw() + theme_prism(base_fontface = 'plain', base_line_size = 0.5)
+g_reg #+ add_pvalue(df_p_valf,y.position=1)
+
+ggsave('pearson_dists_comps_filter_norm_prism_plot_operons_PA14.png', width=6, height=8)
+ggsave('pearson_dists_comps_filter_norm_prism_plot_operons_PA14_size.png', width=4, height=9)
+```
+
+```{r, fig.height=6, fig.width=4}
+plot_temp <- unlist_regp_df #[unlist_regs_df$comp %in% c('array_log01_da','rnaseq_log01_byg_da', 'rnaseq_log01_bya_da','rnaseq_log01_bys_da'),]
+plot_temp_filt <- plot_temp[plot_temp$reg < 1 & plot_temp$rand < 1,]
+plot_temp_names <- plot_temp_filt #%>% mutate(comp = recode(comp, 'array_cors' = "Array", 
+                                  #                    "seqf_cors" = "RNAseq \n (unfiltered)", 
+                                   #                   "seq2_cors" = "RNAseq \n (some filtering)", 
+                                   #                   "seq7_cors" = "RNAseq \n (more filtering)"))
+
+plot_temp_names$comp <- factor(plot_temp_names$comp, levels = names(data_list))
+
+#regs_meds <- summarise(group_by(melt(plot_temp_names),reg_name,comp, variable),median(value))
+#colnames(regs_meds) <- c('reg','comp','data','median')
+
+#df_p_val <- regs_meds %>% 
+#  rstatix::group_by(comp) %>% 
+#  rstatix::pairwise_t_test(median ~ data, paired=T, p.adjust.method = "bonferroni",
+#                           detailed = F) #%>% 
+#  rstatix::add_xy_position()
+
+#df_p_valf <- plot_temp_names %>% melt %>%
+#  rstatix::group_by(comp) %>% 
+#  rstatix::pairwise_t_test(value ~ variable, paired=T, p.adjust.method = "BH") #%>% 
+  #rstatix::add_xy_position()
+
+
+
+g_reg <- ggplot(plot_temp_names) +
+  geom_density( aes(x=reg, y = ..density..), fill = 'black') +
+  geom_density( aes(x=rand, y = -..density..), fill ='grey', color='grey') +
+  geom_vline(aes(xintercept=0), color = 'dark grey', linetype="dashed") +
+  stat_summary( aes(x=0, y = reg, xintercept=stat(y)), fun=mean,  geom="vline", linetype='dashed', color = '#895881', size=1.5) + 
+  scale_color_gradient(low = 'yellow', high = 'red') +
+  stat_summary( aes(x=0, y = rand, xintercept=stat(y)), fun=mean,  geom="vline", color='#89A45E', linetype='dashed', size=1.5) + 
+  facet_grid( rows = vars(comp)) + #,cols=vars(reg_name)
+  labs( x = "Pearson's Correlation Coefficient") +
+  theme_bw() + theme_prism(base_fontface = 'plain', base_line_size = 0.5)
+g_reg #+ add_pvalue(df_p_valf,y.position=1)
+
+ggsave('pearson_dists_comps_filter_norm_prism_plot_regp_PA14.png', width=6, height=8)
+ggsave('pearson_dists_comps_filter_norm_prism_plot_regp_PA14_size.png', width=4, height=9)
+```
+
+## Regulon breakout
+
+```{r, fig.height=2, fig.width=8}
+roi <- c('PhoB_regulon',
+         'VreI_regulon',
+         'AlgU_regulon',
+         'LexA_regulon',
+         'PsrA_regulon')
+
+#roi <- unique(unlist_regs_df$reg_name)[c(1:10)+30]
+
+plot_temp <- unlist_regs_df[unlist_regs_df$comp %in% c('array', 'mr_rnaseq') &
+                              unlist_regs_df$reg_name %in% roi,]
+plot_temp_filt <- plot_temp[plot_temp$reg < 1 & plot_temp$rand < 1,]
+plot_temp_names <- plot_temp_filt #%>% mutate(comp = recode(comp, 'array_cors' = "Array", 
+                                  #                    "seqf_cors" = "RNAseq \n (unfiltered)", 
+                                   #                   "seq2_cors" = "RNAseq \n (some filtering)", 
+                                   #                   "seq7_cors" = "RNAseq \n (more filtering)"))
+
+plot_temp_names$comp <- factor(plot_temp_names$comp, levels = names(data_list))
+plot_temp_names$reg_name <- factor(plot_temp_names$reg_name, levels = roi)
+g_reg_break <- ggplot(plot_temp_names) +
+  geom_density( aes(x=reg, y = ..density..), fill = 'black') +
+  geom_density( aes(x=rand, y = -..density..), fill ='grey', color='grey') +
+  geom_vline(aes(xintercept=0), color = 'dark grey', linetype="dashed") +
+  stat_summary( aes(x=0, y = reg, xintercept=stat(y)), fun=mean,  geom="vline", linetype='dashed', color = '#895881', size=1.25) + 
+  scale_color_gradient(low = 'yellow', high = 'red') +
+  stat_summary( aes(x=0, y = rand, xintercept=stat(y)), fun=mean,  geom="vline", color='#89A45E', linetype='dashed', size=1.25) + 
+  facet_grid( rows = vars(comp),cols=vars(reg_name)) + #
+  labs( x = "Pearson's Correlation Coefficient") +
+  theme_bw() + theme_prism(base_fontface = 'plain', base_line_size = 0.5)
+g_reg_break
+ggsave('pearson_dists_comps_filter_norm_prism_plot_regs_breakout_pho_vre_algU_lexA_psrA_nozs_PA14.png', width=8, height=3)
+```
+
+```{r, fig.height=2, fig.width=8}
+roi <- c('PhoB_regulon',
+         'VreI_regulon',
+         'GbdR_regulon',
+         'SigX_regulon',
+         'LexA_regulon')
+
+#roi <- unique(unlist_regs_df$reg_name)[c(1:10)+30]
+
+plot_temp <- unlist_regs_df[unlist_regs_df$comp %in% c('array', 'mr_rnaseq') &
+                              unlist_regs_df$reg_name %in% roi,]
+plot_temp_filt <- plot_temp[plot_temp$reg < 1 & plot_temp$rand < 1,]
+plot_temp_names <- plot_temp_filt #%>% mutate(comp = recode(comp, 'array_cors' = "Array", 
+                                  #                    "seqf_cors" = "RNAseq \n (unfiltered)", 
+                                   #                   "seq2_cors" = "RNAseq \n (some filtering)", 
+                                   #                   "seq7_cors" = "RNAseq \n (more filtering)"))
+
+plot_temp_names$comp <- factor(plot_temp_names$comp, levels = names(data_list))
+plot_temp_names$reg_name <- factor(plot_temp_names$reg_name, levels = roi)
+g_reg_break <- ggplot(plot_temp_names) +
+  geom_density( aes(x=reg, y = ..density..), fill = 'black') +
+  geom_density( aes(x=rand, y = -..density..), fill ='grey', color='grey') +
+  geom_vline(aes(xintercept=0), color = 'dark grey', linetype="dashed") +
+  stat_summary( aes(x=0, y = reg, xintercept=stat(y)), fun=mean,  geom="vline", linetype='dashed', color = '#895881', size=1.25) + 
+  scale_color_gradient(low = 'yellow', high = 'red') +
+  stat_summary( aes(x=0, y = rand, xintercept=stat(y)), fun=mean,  geom="vline", color='#89A45E', linetype='dashed', size=1.25) + 
+  facet_grid( rows = vars(comp),cols=vars(reg_name)) + #
+  labs( x = "Pearson's Correlation Coefficient") +
+  theme_bw() + theme_prism(base_fontface = 'plain', base_line_size = 0.5)
+g_reg_break
+ggsave('pearson_dists_comps_filter_norm_prism_plot_regs_breakout_pho_vre_gbdR_sigX_lexA_nozs_PA14.png', width=8, height=3)
+```
+
+```{r, fig.height=2, fig.width=8}
+roi <- c(
+         'VreI_regulon',
+         'SigX_regulon',
+         'GbdR_regulon',
+         'LexA_regulon',
+         'PhoB_regulon',
+         'AlgU_regulon')
+
+#roi <- unique(unlist_regs_df$reg_name)[c(1:10)+30]
+
+plot_temp <- unlist_regs_df[unlist_regs_df$comp %in% c('array', 'mr_rnaseq') &
+                              unlist_regs_df$reg_name %in% roi,]
+plot_temp_filt <- plot_temp[plot_temp$reg < 1 & plot_temp$rand < 1,]
+plot_temp_names <- plot_temp_filt #%>% mutate(comp = recode(comp, 'array_cors' = "Array", 
+                                  #                    "seqf_cors" = "RNAseq \n (unfiltered)", 
+                                   #                   "seq2_cors" = "RNAseq \n (some filtering)", 
+                                   #                   "seq7_cors" = "RNAseq \n (more filtering)"))
+
+plot_temp_names$comp <- factor(plot_temp_names$comp, levels = names(data_list))
+plot_temp_names$reg_name <- factor(plot_temp_names$reg_name, levels = roi)
+g_reg_break <- ggplot(plot_temp_names) +
+  geom_density( aes(x=reg, y = ..density..), fill = 'black') +
+  geom_density( aes(x=rand, y = -..density..), fill ='grey', color='grey') +
+  geom_vline(aes(xintercept=0), color = 'dark grey', linetype="dashed") +
+  stat_summary( aes(x=0, y = reg, xintercept=stat(y)), fun=mean,  geom="vline", linetype='dashed', color = '#895881', size=1.25) + 
+  scale_color_gradient(low = 'yellow', high = 'red') +
+  stat_summary( aes(x=0, y = rand, xintercept=stat(y)), fun=mean,  geom="vline", color='#89A45E', linetype='dashed', size=1.25) + 
+  facet_grid( rows = vars(comp),cols=vars(reg_name)) + #
+  labs( x = "Pearson's Correlation Coefficient") +
+  theme_bw() + theme_prism(base_fontface = 'plain', base_line_size = 0.5)
+g_reg_break
+ggsave('pearson_dists_comps_filter_norm_prism_plot_regs_breakout_pho_vre_gbdR_sigX_algU_lexA_nozs_PA14.png', width=9, height=3)
+```
+
+```{r, fig.height=2, fig.width=8}
+roi <- c('PhoB_regulon',
+         'VreI_regulon',
+        
+         'AlgU_regulon',
+         'LexA_regulon')
+
+#roi <- unique(unlist_regs_df$reg_name)[c(1:10)+30]
+
+plot_temp <- unlist_regs_df[unlist_regs_df$comp %in% c('array', 'mr_rnaseq') &
+                              unlist_regs_df$reg_name %in% roi,]
+plot_temp_filt <- plot_temp[plot_temp$reg < 1 & plot_temp$rand < 1,]
+plot_temp_names <- plot_temp_filt #%>% mutate(comp = recode(comp, 'array_cors' = "Array", 
+                                  #                    "seqf_cors" = "RNAseq \n (unfiltered)", 
+                                   #                   "seq2_cors" = "RNAseq \n (some filtering)", 
+                                   #                   "seq7_cors" = "RNAseq \n (more filtering)"))
+
+plot_temp_names$comp <- factor(plot_temp_names$comp, levels = names(data_list))
+plot_temp_names$reg_name <- factor(plot_temp_names$reg_name, levels = roi)
+g_reg_break <- ggplot(plot_temp_names) +
+  geom_density( aes(x=reg, y = ..density..), fill = 'black') +
+  geom_density( aes(x=rand, y = -..density..), fill ='grey', color='grey') +
+  geom_vline(aes(xintercept=0), color = 'dark grey', linetype="dashed") +
+  stat_summary( aes(x=0, y = reg, xintercept=stat(y)), fun=mean,  geom="vline", linetype='dashed', color = '#895881', size=1.25) + 
+  scale_color_gradient(low = 'yellow', high = 'red') +
+  stat_summary( aes(x=0, y = rand, xintercept=stat(y)), fun=mean,  geom="vline", color='#89A45E', linetype='dashed', size=1.25) + 
+  facet_grid( rows = vars(comp),cols=vars(reg_name)) + #
+  labs( x = "Pearson's Correlation Coefficient") +
+  theme_bw() + theme_prism(base_fontface = 'plain', base_line_size = 0.5)
+g_reg_break
+ggsave('pearson_dists_comps_filter_norm_prism_plot_regs_breakout_pho_vre_algU_lexA_nozs_PA14.png', width=9, height=3)
+```
+## By Experiment (batch effect)
+
+```{r}
+run_table <- read.csv('SraRunTable.csv', stringsAsFactors = F)
+arr_anns <- read.csv('~/Dropbox (Hogan Lab)/Resources/Annotations/Pa_Compendium_annotations.csv', stringsAsFactors = F)
+
+```
+
+```{r}
+
+ann_exp_groups <- lapply(data_list, function(l){
+  sapply(colnames(l), function(x){
+  exp <- if(x %in% arr_anns$CEL.file){
+    arr_anns$Experiment[arr_anns$CEL.file == x]
+  } else if(gsub('-','',gsub('\\.','',gsub('_','',x))) %in% gsub('-','',gsub('\\.','',gsub('_','',arr_anns$CEL.file)))){
+    arr_anns$Experiment[gsub('-','',gsub('\\.','',gsub('_','',arr_anns$CEL.file))) == gsub('-','',gsub('\\.','',gsub('_','',x))) ]
+  }  else if(substr(x,1,regexpr('\\.',x)[1]-1) %in% run_table$Experiment){
+    run_table$SRA_study[ run_table$Experiment == substr(x,1,regexpr('\\.',x)[1]-1)]
+  }   else{
+    "Unknown"
+  }
+  exp[1]
+  }
+)
+})
+
+sapply(ann_exp_groups, function(x) length(unique(x)))
+```
+
+```{r}
+exp_by_exp <- lapply(data_list, function(x){
+  
+  
+})
+```
+
